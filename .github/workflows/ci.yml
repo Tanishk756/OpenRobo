@@ -1,0 +1,64 @@
+name: OpenRobo CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  python-checks:
+    name: Python Lint, Schema & Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff pytest pytest-asyncio httpx jsonschema networkx pydantic pydantic-settings fastapi uvicorn sqlalchemy alembic asyncpg psycopg2-binary typer rich
+          pip install -e packages/schemas
+          pip install -e packages/compat-engine
+          pip install -e packages/cli
+          pip install -e apps/api
+
+      - name: Run Ruff Linting
+        run: ruff check .
+
+      - name: Validate Schemas
+        run: python3 scripts/validate_schemas.py
+
+      - name: Run Pytest
+        run: pytest
+
+  frontend-checks:
+    name: Frontend Lint, Vitest & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Node Dependencies
+        run: pnpm install
+
+      - name: Run Web Unit Tests (Vitest)
+        run: pnpm --filter openrobo-web test
+
+      - name: Build Web Application
+        run: pnpm --filter openrobo-web build

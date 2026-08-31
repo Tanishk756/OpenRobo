@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openrobo-workspace"
+version = "0.1.0"
+description = "OpenRobo Monorepo Workspace"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".next",
+    "alembic",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.pytest.ini_options]
+addopts = "-p no:launch_testing_ros_pytest_entrypoint -p no:launch_testing -p no:ament_lint -p no:ament_flake8 -p no:ament_xmllint -p no:ament_copyright -p no:ament_pep257"
+pythonpath = ["."]
+testpaths = [
+    "apps/api/tests",
+    "packages/compat-engine/tests",
+    "packages/cli/tests"
+]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"

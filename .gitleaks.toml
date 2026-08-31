@@ -1,0 +1,14 @@
+[config]
+description = "Gitleaks secret scanning configuration for OpenRobo"
+
+[allowlist]
+description = "Global allowlist for dev placeholders"
+regexes = [
+    '''openrobo_dev_password''',
+    '''development_only_secret_key''',
+]
+paths = [
+    '''\.env\.example$''',
+    '''docker-compose\.yml$''',
+    '''README\.md$''',
+]

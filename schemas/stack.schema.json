@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openrobo.org/schemas/v1/stack.schema.json",
+  "title": "OpenRobo Stack Manifest Schema",
+  "description": "Schema defining a reproducible multi-component robotics stack manifest.",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "robot",
+    "components"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$"
+    },
+    "version": {
+      "type": "string"
+    },
+    "robot": {
+      "type": "object",
+      "required": ["domain", "type"],
+      "properties": {
+        "domain": { "type": "string" },
+        "type": { "type": "string" }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["resource_id"],
+        "properties": {
+          "resource_id": { "type": "string" },
+          "version": { "type": "string" },
+          "category": { "type": "string" }
+        }
+      }
+    },
+    "target_platform": {
+      "type": "object",
+      "properties": {
+        "os": { "type": "string" },
+        "arch": { "type": "string" },
+        "ros_version": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": true
+}

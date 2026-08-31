@@ -1,33 +1,102 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "OpenRobo Resource",
+  "$id": "https://openrobo.org/schemas/v1/resource.schema.json",
+  "title": "OpenRobo Resource Manifest Schema",
+  "description": "Standardized schema for indexing open-source robotics resources, packages, hardware, models, and complete projects.",
   "type": "object",
   "required": [
     "id",
     "name",
+    "version",
     "type",
-    "source"
+    "source",
+    "license"
   ],
   "properties": {
     "id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^[a-z0-9_.-]+/[a-z0-9_.-]+$",
+      "description": "Unique namespaced identifier (e.g. ros-controls/ros2_control)"
     },
     "name": {
       "type": "string",
-      "minLength": 1
-    },
-    "type": {
-      "type": "string"
+      "minLength": 1,
+      "description": "Human readable resource name"
     },
     "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$",
+      "description": "SemVer version string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "software",
+        "framework",
+        "library",
+        "ros_package",
+        "driver",
+        "firmware",
+        "hardware",
+        "sensor",
+        "actuator",
+        "robot",
+        "dataset",
+        "ai_model",
+        "simulation",
+        "environment",
+        "cad",
+        "pcb",
+        "documentation",
+        "tutorial",
+        "paper",
+        "benchmark",
+        "complete_project",
+        "tool",
+        "protocol",
+        "standard"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 280
+    },
+    "description": {
       "type": "string"
     },
     "source": {
-      "type": "object"
+      "type": "object",
+      "required": ["repo_url"],
+      "properties": {
+        "repo_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "vcs_type": {
+          "type": "string",
+          "default": "git"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        }
+      }
     },
     "license": {
-      "type": "object"
+      "type": "object",
+      "required": ["spdx_id"],
+      "properties": {
+        "spdx_id": {
+          "type": "string",
+          "description": "Standard SPDX license identifier (e.g. Apache-2.0, BSD-3-Clause, GPL-3.0-only)"
+        },
+        "license_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
     },
     "robotics_domains": {
       "type": "array",
@@ -42,19 +111,40 @@
       }
     },
     "platforms": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "operating_systems": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "cpu_architectures": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ros_versions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
     },
-    "dependencies": {
-      "type": "array"
-    },
-    "hardware": {
-      "type": "object"
-    },
-    "simulation": {
-      "type": "object"
-    },
-    "provenance": {
-      "type": "object"
+    "evidence": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "upstream_declared",
+            "automatically_detected",
+            "ci_verified",
+            "integration_tested",
+            "community_reported",
+            "inferred",
+            "unknown"
+          ]
+        },
+        "notes": { "type": "string" }
+      }
     }
   },
   "additionalProperties": true

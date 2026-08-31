@@ -1,0 +1,35 @@
+{
+  "$schema": "https://openrobo.org/schemas/v1/resource.schema.json",
+  "id": "ros-controls/ros2_control",
+  "name": "ros2_control",
+  "version": "2.1.0",
+  "type": "ros_package",
+  "summary": "Real-time control framework for ROS 2 systems.",
+  "description": "ros2_control is a set of control frameworks and tools for real-time control of robots using ROS 2.",
+  "source": {
+    "repo_url": "https://github.com/ros-controls/ros2_control",
+    "vcs_type": "git",
+    "branch": "humble"
+  },
+  "license": {
+    "spdx_id": "Apache-2.0",
+    "license_url": "https://spdx.org/licenses/Apache-2.0.html"
+  },
+  "robotics_domains": [
+    "manipulation",
+    "mobile_robotics"
+  ],
+  "capabilities": [
+    "joint_control",
+    "hardware_interface"
+  ],
+  "platforms": {
+    "operating_systems": ["Ubuntu 22.04"],
+    "cpu_architectures": ["x86_64", "aarch64"],
+    "ros_versions": ["humble", "iron", "jazzy"]
+  },
+  "evidence": {
+    "level": "ci_verified",
+    "notes": "Verified against ROS 2 Humble build farm."
+  }
+}

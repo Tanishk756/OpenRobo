@@ -1,0 +1,15 @@
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Optional, Dict, Any
+
+class GraphEdgeBase(BaseModel):
+    subject_id: str = Field(..., json_schema_extra={"example": "ros-navigation/nav2"})
+    predicate: str = Field(..., json_schema_extra={"example": "depends-on"})
+    object_id: str = Field(..., json_schema_extra={"example": "ros-controls/ros2_control"})
+    properties: Optional[Dict[str, Any]] = None
+
+class GraphEdgeCreate(GraphEdgeBase):
+    pass
+
+class GraphEdgeRead(GraphEdgeBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)

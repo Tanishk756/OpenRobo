@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openrobo.org/schemas/v1/graph.schema.json",
+  "title": "OpenRobo Knowledge Graph Edge Schema",
+  "description": "Schema defining directed relationship edges in the OpenRobo Knowledge Graph.",
+  "type": "object",
+  "required": [
+    "subject_id",
+    "predicate",
+    "object_id"
+  ],
+  "properties": {
+    "subject_id": {
+      "type": "string",
+      "description": "Resource identifier of the subject node"
+    },
+    "predicate": {
+      "type": "string",
+      "enum": [
+        "depends-on",
+        "optional-dependency",
+        "conflicts-with",
+        "compatible-with",
+        "tested-with",
+        "provides",
+        "implements",
+        "driver-for",
+        "hardware-for",
+        "simulation-model-for",
+        "simulated-by",
+        "runs-on",
+        "requires",
+        "used-by",
+        "part-of",
+        "alternative-to",
+        "derived-from"
+      ]
+    },
+    "object_id": {
+      "type": "string",
+      "description": "Resource identifier of the object node"
+    },
+    "properties": {
+      "type": "object",
+      "description": "Additional edge constraints (min_version, max_version, optional flags)",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
