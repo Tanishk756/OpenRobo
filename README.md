@@ -1,21 +1,40 @@
-# OpenRobo
+﻿# OpenRobo
 
 Open-source robotics commons: discover, build, simulate, deploy, and contribute.
 
 ## Status
-Foundation / architecture phase.
+**Milestone 1 — Registry Engine & Resource Discovery** (In Progress / Baseline Delivered).
 
-## Core principles
+## Core Principles
 - Free to use
-- Open source
+- Open source (Apache-2.0)
 - Vendor neutral
 - Hardware agnostic
 - AI/model agnostic
 - All robotics domains
-- Local-first
+- Local-first & offline-friendly
 - License-aware
-- Reproducible
-- Community driven
+- Reproducible & community driven
 
-## Development
-The authoritative product and engineering specifications live in `docs/`.
+## Quick Start (Cross-Platform)
+
+### 1. Install Dependencies
+```bash
+# Node workspace packages
+pnpm install
+
+# Python packages (editable mode)
+python -m pip install -e packages/schemas -e packages/compat-engine -e packages/cli -e "apps/api[test]"
+```
+
+### 2. Run Validation & Test Suite
+```bash
+pnpm run check
+```
+
+### 3. Start Development Services
+- **Backend API**: `pnpm run dev:api` (Runs FastAPI at `http://localhost:8000`)
+- **Web Frontend**: `pnpm run dev:web` (Runs Next.js at `http://localhost:3000`)
+- **Seed Registry Data**: `pnpm run seed`
+
+For detailed setup instructions on both Windows and Linux, see [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md).

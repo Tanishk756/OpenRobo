@@ -27,11 +27,11 @@ Statuses: `NOT_STARTED` | `PLANNED` | `IN_PROGRESS` | `BLOCKED` | `IMPLEMENTED` 
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|---|
-| **REQ-M1-01** | Resource JSON Schema Validation | `PLANNED` | JSON Schema draft 2020-12 verification in API and CLI | Schema unit tests | Pending | Needs complete schema extensions | Implement `packages/schemas` validation |
-| **REQ-M1-02** | Database Models & Alembic Migrations | `PLANNED` | SQLAlchemy 2.x PostgreSQL models for Resources & Knowledge Graph Edges | DB integration tests | Pending | None | Implement `apps/api/models` & Alembic |
-| **REQ-M1-03** | Registry REST API (CRUD + List) | `PLANNED` | FastAPI `/api/v1/resources` endpoints with Pydantic v2 validation | FastAPI TestClient | Pending | None | Implement `apps/api/routers` |
+| **REQ-M1-01** | Resource JSON Schema Validation | **VERIFIED** | JSON Schema draft 2020-12 verification in API and CLI | Schema unit tests | `scripts/validate_schemas.py` | None | Maintain canonical schemas |
+| **REQ-M1-02** | Database Models & Alembic Migrations | **VERIFIED** | SQLAlchemy 2.x async models for Resources, Graph, Domains, Capabilities | Pytest DB tests | `apps/api/models/` & `alembic/` | None | Extend with future relational entities |
+| **REQ-M1-03** | Registry REST API (CRUD + List) | **VERIFIED** | FastAPI `/api/v1/resources` endpoints with multi-filter and deterministic pagination | Pytest suite | `apps/api/routers/resources.py` | None | Connect full-text search in M2 |
 | **REQ-M1-04** | GitHub Ingestion Service | `PLANNED` | Safe static AST/package.xml manifest extractor (metadata registry only) | Ingestion mock tests | Pending | Rate limits on unauthenticated API calls | Implement ingestion pipeline |
-| **REQ-M1-05** | Resource Discovery Web Interface | `PLANNED` | Next.js Explore, Software, Hardware & Detail pages | Vitest / Playwright | Pending | Initial styling baseline | Implement `apps/web/app` |
+| **REQ-M1-05** | Resource Discovery Web Interface | **VERIFIED** | Next.js 14 Resource Explorer at `/resources` with search, filters, card & drawer | Vitest / RTL | `apps/web/app/resources` | None | Connect graph visualizer in M3 |
 
 ---
 
