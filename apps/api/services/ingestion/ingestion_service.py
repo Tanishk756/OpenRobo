@@ -1,4 +1,4 @@
-﻿from typing import Optional
+from typing import Optional
 
 from openrobo_schemas import validate_resource_manifest
 from sqlalchemy import select
@@ -16,12 +16,7 @@ class IngestionService:
         self.client = client or GitHubClient(token=github_token)
         self.inspector = RepositoryInspector(self.client)
 
-    async def ingest_github_repository(
-        self,
-        db: AsyncSession,
-        repository_url: str,
-        force_refresh: bool = False
-    ) -> GithubIngestionResponse:
+    async def ingest_github_repository(self, db: AsyncSession, repository_url: str, force_refresh: bool = False) -> GithubIngestionResponse:
         owner, repo = validate_and_parse_github_url(repository_url)
 
         # Inspect repository
@@ -56,7 +51,7 @@ class IngestionService:
                         action=IngestionAction.FAILED,
                         validation_status="INVALID",
                         provenance=provenance,
-                        errors=schema_errors
+                        errors=schema_errors,
                     )
                 )
                 continue
@@ -82,15 +77,14 @@ class IngestionService:
                 existing.metadata_json = {
                     "provenance": provenance,
                     "dependencies": candidate.get("dependencies", {}),
-                    "sub_packages": candidate.get("sub_packages", [])
+                    "sub_packages": candidate.get("sub_packages", []),
                 }
                 existing.updated_at = utc_now()
                 updated_count += 1
 
                 # Check if version exists
                 ver_stmt = select(ResourceVersionModel).where(
-                    ResourceVersionModel.resource_id == res_id,
-                    ResourceVersionModel.version_string == res_ver
+                    ResourceVersionModel.resource_id == res_id, ResourceVersionModel.version_string == res_ver
                 )
                 ver_res = await db.execute(ver_stmt)
                 existing_ver = ver_res.scalar_one_or_none()
@@ -98,10 +92,7 @@ class IngestionService:
                     existing_ver.manifest_json = candidate
                 else:
                     new_ver = ResourceVersionModel(
-                        id=f"{res_id}@{res_ver}",
-                        resource_id=res_id,
-                        version_string=res_ver,
-                        manifest_json=candidate
+                        id=f"{res_id}@{res_ver}", resource_id=res_id, version_string=res_ver, manifest_json=candidate
                     )
                     db.add(new_ver)
 
@@ -121,15 +112,12 @@ class IngestionService:
                     metadata_json={
                         "provenance": provenance,
                         "dependencies": candidate.get("dependencies", {}),
-                        "sub_packages": candidate.get("sub_packages", [])
-                    }
+                        "sub_packages": candidate.get("sub_packages", []),
+                    },
                 )
                 db.add(new_resource)
                 new_ver = ResourceVersionModel(
-                    id=f"{res_id}@{res_ver}",
-                    resource_id=res_id,
-                    version_string=res_ver,
-                    manifest_json=candidate
+                    id=f"{res_id}@{res_ver}", resource_id=res_id, version_string=res_ver, manifest_json=candidate
                 )
                 db.add(new_ver)
                 created_count += 1
@@ -143,7 +131,7 @@ class IngestionService:
                     action=action,
                     validation_status="VALID",
                     provenance=provenance,
-                    errors=[]
+                    errors=[],
                 )
             )
 
@@ -157,5 +145,5 @@ class IngestionService:
             resources_updated=updated_count,
             warnings=warnings,
             errors=errors,
-            resources=summaries
+            resources=summaries,
         )

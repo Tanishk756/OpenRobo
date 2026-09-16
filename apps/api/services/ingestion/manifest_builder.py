@@ -1,4 +1,4 @@
-﻿import re
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
@@ -74,10 +74,7 @@ def sanitize_slug(name: str) -> str:
 
 
 def infer_domains_and_capabilities(
-    name: str,
-    description: str | None,
-    topics: List[str],
-    robotics_markers: List[str]
+    name: str, description: str | None, topics: List[str], robotics_markers: List[str]
 ) -> Tuple[List[str], List[str]]:
     corpus = f"{name} {description or ''} {' '.join(topics)} {' '.join(robotics_markers)}".lower()
     domains = set()
@@ -128,33 +125,28 @@ def build_candidate_manifests(evidence: RepoInspectionEvidence) -> List[Dict[str
                 "repo_url": repo_url,
                 "vcs_type": "git",
                 "branch": evidence.default_branch,
-                "commit": evidence.commit_sha or evidence.default_branch
+                "commit": evidence.commit_sha or evidence.default_branch,
             },
-            "license": {
-                "spdx_id": repo_license,
-                "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"
-            },
+            "license": {"spdx_id": repo_license, "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"},
             "robotics_domains": repo_domains,
             "capabilities": repo_caps,
             "platforms": {
                 "operating_systems": ["Linux", "Ubuntu 22.04", "Ubuntu 24.04"],
                 "cpu_architectures": ["x86_64", "arm64"],
-                "ros_versions": ["ROS 2 Humble", "ROS 2 Jazzy"] if "ros_package" in evidence.robotics_markers else []
+                "ros_versions": ["ROS 2 Humble", "ROS 2 Jazzy"] if "ros_package" in evidence.robotics_markers else [],
             },
             "evidence": {
                 "level": "automatically_detected",
-                "notes": f"Ingested from GitHub monorepo with {len(evidence.packages)} ROS packages."
+                "notes": f"Ingested from GitHub monorepo with {len(evidence.packages)} ROS packages.",
             },
             "provenance": base_provenance,
-            "sub_packages": [pkg.name for pkg in evidence.packages]
+            "sub_packages": [pkg.name for pkg in evidence.packages],
         }
         candidates.append(top_candidate)
 
         for pkg in evidence.packages:
             pkg_slug = sanitize_slug(pkg.name)
-            pkg_domains, pkg_caps = infer_domains_and_capabilities(
-                pkg.name, pkg.description, evidence.topics, evidence.robotics_markers
-            )
+            pkg_domains, pkg_caps = infer_domains_and_capabilities(pkg.name, pkg.description, evidence.topics, evidence.robotics_markers)
             pkg_license = normalize_spdx_license(pkg.license or evidence.spdx_license_id)
 
             pkg_candidate = {
@@ -168,34 +160,27 @@ def build_candidate_manifests(evidence: RepoInspectionEvidence) -> List[Dict[str
                     "repo_url": repo_url,
                     "vcs_type": "git",
                     "branch": evidence.default_branch,
-                    "commit": evidence.commit_sha or evidence.default_branch
+                    "commit": evidence.commit_sha or evidence.default_branch,
                 },
-                "license": {
-                    "spdx_id": pkg_license,
-                    "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"
-                },
+                "license": {"spdx_id": pkg_license, "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"},
                 "robotics_domains": pkg_domains or repo_domains,
                 "capabilities": pkg_caps or repo_caps,
                 "platforms": {
                     "operating_systems": ["Linux", "Ubuntu 22.04", "Ubuntu 24.04"],
                     "cpu_architectures": ["x86_64", "arm64"],
-                    "ros_versions": ["ROS 2 Humble", "ROS 2 Jazzy"]
+                    "ros_versions": ["ROS 2 Humble", "ROS 2 Jazzy"],
                 },
                 "evidence": {
                     "level": "upstream_declared" if pkg.license else "automatically_detected",
-                    "notes": f"Extracted from manifest '{pkg.rel_path}'."
+                    "notes": f"Extracted from manifest '{pkg.rel_path}'.",
                 },
                 "dependencies": {
                     "build": pkg.build_depends,
                     "exec": pkg.exec_depends,
                     "test": pkg.test_depends,
-                    "buildtool": pkg.buildtool_depends
+                    "buildtool": pkg.buildtool_depends,
                 },
-                "provenance": {
-                    **base_provenance,
-                    "source_manifest_path": pkg.rel_path,
-                    "maintainers": pkg.maintainers
-                }
+                "provenance": {**base_provenance, "source_manifest_path": pkg.rel_path, "maintainers": pkg.maintainers},
             }
             candidates.append(pkg_candidate)
 
@@ -219,34 +204,27 @@ def build_candidate_manifests(evidence: RepoInspectionEvidence) -> List[Dict[str
                 "repo_url": repo_url,
                 "vcs_type": "git",
                 "branch": evidence.default_branch,
-                "commit": evidence.commit_sha or evidence.default_branch
+                "commit": evidence.commit_sha or evidence.default_branch,
             },
-            "license": {
-                "spdx_id": pkg_license,
-                "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"
-            },
+            "license": {"spdx_id": pkg_license, "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"},
             "robotics_domains": pkg_domains,
             "capabilities": pkg_caps,
             "platforms": {
                 "operating_systems": ["Linux", "Ubuntu 22.04", "Ubuntu 24.04"],
                 "cpu_architectures": ["x86_64", "arm64"],
-                "ros_versions": ["ROS 2 Humble", "ROS 2 Jazzy"]
+                "ros_versions": ["ROS 2 Humble", "ROS 2 Jazzy"],
             },
             "evidence": {
                 "level": "upstream_declared" if pkg.license else "automatically_detected",
-                "notes": f"Extracted from manifest '{pkg.rel_path}'."
+                "notes": f"Extracted from manifest '{pkg.rel_path}'.",
             },
             "dependencies": {
                 "build": pkg.build_depends,
                 "exec": pkg.exec_depends,
                 "test": pkg.test_depends,
-                "buildtool": pkg.buildtool_depends
+                "buildtool": pkg.buildtool_depends,
             },
-            "provenance": {
-                **base_provenance,
-                "source_manifest_path": pkg.rel_path,
-                "maintainers": pkg.maintainers
-            }
+            "provenance": {**base_provenance, "source_manifest_path": pkg.rel_path, "maintainers": pkg.maintainers},
         }
         candidates.append(single_candidate)
 
@@ -275,24 +253,18 @@ def build_candidate_manifests(evidence: RepoInspectionEvidence) -> List[Dict[str
                 "repo_url": repo_url,
                 "vcs_type": "git",
                 "branch": evidence.default_branch,
-                "commit": evidence.commit_sha or evidence.default_branch
+                "commit": evidence.commit_sha or evidence.default_branch,
             },
-            "license": {
-                "spdx_id": repo_license,
-                "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"
-            },
+            "license": {"spdx_id": repo_license, "license_url": f"{repo_url}/blob/{evidence.default_branch}/LICENSE"},
             "robotics_domains": repo_domains,
             "capabilities": repo_caps,
             "platforms": {
                 "operating_systems": ["Linux", "Ubuntu 22.04", "Ubuntu 24.04"],
                 "cpu_architectures": ["x86_64", "arm64"],
-                "ros_versions": []
+                "ros_versions": [],
             },
-            "evidence": {
-                "level": "automatically_detected",
-                "notes": "Static inspection without package.xml manifest."
-            },
-            "provenance": base_provenance
+            "evidence": {"level": "automatically_detected", "notes": "Static inspection without package.xml manifest."},
+            "provenance": base_provenance,
         }
         candidates.append(generic_candidate)
 

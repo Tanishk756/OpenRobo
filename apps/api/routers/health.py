@@ -8,6 +8,7 @@ from apps.api.schemas.health import HealthResponse
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
+
 @router.get("", response_model=HealthResponse, summary="System Health Status")
 async def get_health(db: AsyncSession = Depends(get_db)):
     db_status = "connected"
@@ -17,11 +18,9 @@ async def get_health(db: AsyncSession = Depends(get_db)):
         db_status = "disconnected"
 
     return HealthResponse(
-        status="healthy" if db_status == "connected" else "degraded",
-        version="0.1.0",
-        environment=settings.environment,
-        database=db_status
+        status="healthy" if db_status == "connected" else "degraded", version="0.1.0", environment=settings.environment, database=db_status
     )
+
 
 @router.get("/readiness", summary="Readiness Probe Endpoint")
 async def get_readiness():

@@ -1,4 +1,4 @@
-﻿from typing import List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from openrobo_schemas import validate_resource_manifest
@@ -11,6 +11,7 @@ from apps.api.schemas.resource import ResourceCreate, ResourceRead
 
 router = APIRouter(prefix="/resources", tags=["Resources"])
 
+
 @router.get("", response_model=List[ResourceRead], summary="List and Search Registered Resources")
 async def list_resources(
     response: Response,
@@ -21,7 +22,7 @@ async def list_resources(
     ecosystem: Optional[str] = Query(None, description="Filter by ecosystem/platform"),
     limit: int = Query(50, ge=1, le=100, description="Maximum results (1-100)"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ResourceModel)
 
@@ -53,7 +54,7 @@ async def list_resources(
             or_(
                 func.lower(cast(ResourceModel.platforms, String)).contains(eco_term),
                 func.lower(ResourceModel.spdx_license_id).contains(eco_term),
-                func.lower(ResourceModel.type).contains(eco_term)
+                func.lower(ResourceModel.type).contains(eco_term),
             )
         )
 
@@ -71,17 +72,16 @@ async def list_resources(
 
     return resources
 
+
 @router.get("/{resource_id:path}", response_model=ResourceRead, summary="Get Resource by ID")
 async def get_resource(resource_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(ResourceModel).where(ResourceModel.id == resource_id)
     result = await db.execute(stmt)
     resource = result.scalar_one_or_none()
     if not resource:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Resource with ID '{resource_id}' not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Resource with ID '{resource_id}' not found.")
     return resource
+
 
 @router.post("", response_model=ResourceRead, status_code=status.HTTP_201_CREATED, summary="Create Resource Manifest")
 async def create_resource(payload: ResourceCreate, db: AsyncSession = Depends(get_db)):
@@ -96,15 +96,12 @@ async def create_resource(payload: ResourceCreate, db: AsyncSession = Depends(ge
     if not valid:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"message": "Resource manifest schema validation failed", "errors": errors}
+            detail={"message": "Resource manifest schema validation failed", "errors": errors},
         )
 
     existing = await db.get(ResourceModel, payload.id)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Resource with ID '{payload.id}' already exists."
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Resource with ID '{payload.id}' already exists.")
 
     repo_url = payload.repo_url or (payload.source.repo_url if payload.source else None)
     spdx_license = (
@@ -113,9 +110,7 @@ async def create_resource(payload: ResourceCreate, db: AsyncSession = Depends(ge
         else (payload.license.spdx_id if payload.license else "NOASSERTION")
     )
     evidence_level = (
-        payload.evidence_level
-        if payload.evidence_level != "unknown"
-        else (payload.evidence.level if payload.evidence else "unknown")
+        payload.evidence_level if payload.evidence_level != "unknown" else (payload.evidence.level if payload.evidence else "unknown")
     )
 
     resource = ResourceModel(
@@ -133,18 +128,13 @@ async def create_resource(payload: ResourceCreate, db: AsyncSession = Depends(ge
         metadata_json={
             "source": payload.source.model_dump() if payload.source else {},
             "license": payload.license.model_dump() if payload.license else {},
-            "evidence": payload.evidence.model_dump() if payload.evidence else {}
-        }
+            "evidence": payload.evidence.model_dump() if payload.evidence else {},
+        },
     )
     db.add(resource)
 
     version_id = payload.id + "@" + payload.version
-    version_entry = ResourceVersionModel(
-        id=version_id,
-        resource_id=payload.id,
-        version_string=payload.version,
-        manifest_json=raw_dict
-    )
+    version_entry = ResourceVersionModel(id=version_id, resource_id=payload.id, version_string=payload.version, manifest_json=raw_dict)
     db.add(version_entry)
 
     await db.commit()

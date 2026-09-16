@@ -17,5 +17,5 @@ __all__ = [
     "CapabilityModel",
     "StackManifestModel",
     "GraphNodeModel",
-    "GraphEdgeModel"
+    "GraphEdgeModel",
 ]

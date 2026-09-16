@@ -13,6 +13,7 @@ from jsonschema import Draft202012Validator
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SCHEMAS_DIR = ROOT_DIR / "schemas"
 
+
 def validate_schema_file(schema_path: Path) -> bool:
     print(f"Validating schema definition: {schema_path.name}...")
     try:
@@ -24,6 +25,7 @@ def validate_schema_file(schema_path: Path) -> bool:
     except Exception as e:
         print(f"  [ERROR] {schema_path.name} failed validation: {e}")
         return False
+
 
 def validate_sample_instance():
     print("Validating sample resource manifest against resource.schema.json...")
@@ -37,23 +39,12 @@ def validate_sample_instance():
         "version": "1.3.0",
         "type": "ros_package",
         "summary": "ROS 2 Navigation Framework for Autonomous Mobile Robots",
-        "source": {
-            "repo_url": "https://github.com/ros-navigation/navigation2",
-            "vcs_type": "git"
-        },
-        "license": {
-            "spdx_id": "Apache-2.0"
-        },
+        "source": {"repo_url": "https://github.com/ros-navigation/navigation2", "vcs_type": "git"},
+        "license": {"spdx_id": "Apache-2.0"},
         "robotics_domains": ["ground", "amr", "rover"],
         "capabilities": ["navigation", "path-planning", "obstacle-avoidance"],
-        "platforms": {
-            "operating_systems": ["Ubuntu 24.04"],
-            "cpu_architectures": ["x86_64", "arm64"],
-            "ros_versions": ["Jazzy"]
-        },
-        "evidence": {
-            "level": "ci_verified"
-        }
+        "platforms": {"operating_systems": ["Ubuntu 24.04"], "cpu_architectures": ["x86_64", "arm64"], "ros_versions": ["Jazzy"]},
+        "evidence": {"level": "ci_verified"},
     }
 
     validator = Draft202012Validator(schema)
@@ -66,6 +57,7 @@ def validate_sample_instance():
     else:
         print("  [OK] Sample resource manifest successfully validated.")
         return True
+
 
 def main():
     all_valid = True
@@ -82,6 +74,7 @@ def main():
     else:
         print("\nAll OpenRobo schemas and sample instances are VALID.")
         sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

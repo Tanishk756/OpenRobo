@@ -8,8 +8,7 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0", description="API listen host")
     api_port: int = Field(default=8000, description="API listen port")
     api_secret_key: str = Field(
-        default="development_only_secret_key_change_in_production_32_bytes",
-        description="Secret key for signing tokens"
+        default="development_only_secret_key_change_in_production_32_bytes", description="Secret key for signing tokens"
     )
 
     # PostgreSQL Configuration
@@ -20,13 +19,10 @@ class Settings(BaseSettings):
     postgres_port: int = Field(default=5432)
     database_url: str = Field(
         default="postgresql+asyncpg://openrobo:openrobo_dev_password@localhost:5432/openrobo_db",
-        description="Async SQLAlchemy Database URL"
+        description="Async SQLAlchemy Database URL",
     )
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
 
 settings = Settings()

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 from pathlib import Path
 
@@ -9,6 +9,7 @@ from apps.api.models.resource import ResourceModel, ResourceVersionModel
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLES_FILE = ROOT / "samples" / "seed_resources.json"
+
 
 async def seed_database():
     print("Initializing database tables...")
@@ -46,7 +47,7 @@ async def seed_database():
                 existing.metadata_json = {
                     "source": item.get("source", {}),
                     "license": item.get("license", {}),
-                    "evidence": item.get("evidence", {})
+                    "evidence": item.get("evidence", {}),
                 }
             else:
                 print(f"  [INSERT] {item['id']}")
@@ -65,21 +66,19 @@ async def seed_database():
                     metadata_json={
                         "source": item.get("source", {}),
                         "license": item.get("license", {}),
-                        "evidence": item.get("evidence", {})
-                    }
+                        "evidence": item.get("evidence", {}),
+                    },
                 )
                 session.add(res)
 
                 version_entry = ResourceVersionModel(
-                    id=item["id"] + "@" + item["version"],
-                    resource_id=item["id"],
-                    version_string=item["version"],
-                    manifest_json=item
+                    id=item["id"] + "@" + item["version"], resource_id=item["id"], version_string=item["version"], manifest_json=item
                 )
                 session.add(version_entry)
 
         await session.commit()
     print("Database seeding completed successfully.")
+
 
 if __name__ == "__main__":
     asyncio.run(seed_database())

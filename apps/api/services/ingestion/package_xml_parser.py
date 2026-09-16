@@ -110,5 +110,5 @@ def parse_package_xml(xml_content: str, rel_path: str = "package.xml") -> Packag
         group_depends=list(set(group_depends)),
         export_tags=export_tags,
         format_version=format_version,
-        rel_path=rel_path
+        rel_path=rel_path,
     )

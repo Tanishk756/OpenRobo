@@ -19,6 +19,7 @@ BLOCKED_IP_NETWORKS = [
     ipaddress.ip_network("fe80::/10"),
 ]
 
+
 def validate_external_url(url: str) -> bool:
     """
     SSRF Protection: Validates external repository URLs, preventing requests
@@ -44,9 +45,9 @@ def validate_external_url(url: str) -> bool:
         return True
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"SSRF Security Violation: Invalid or forbidden external URL. Reason: {e}"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"SSRF Security Violation: Invalid or forbidden external URL. Reason: {e}"
         )
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):

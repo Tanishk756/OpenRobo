@@ -4,23 +4,14 @@ from sqlalchemy.pool import NullPool
 
 from apps.api.config import settings
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=(settings.environment == "development"),
-    poolclass=NullPool,
-    future=True
-)
+engine = create_async_engine(settings.database_url, echo=(settings.environment == "development"), poolclass=NullPool, future=True)
 
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False
-)
+AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False, autocommit=False, autoflush=False)
+
 
 class Base(DeclarativeBase):
     pass
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:

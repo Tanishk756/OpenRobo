@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from httpx import AsyncClient
 
 SAMPLE_RESOURCE = {
@@ -12,12 +12,8 @@ SAMPLE_RESOURCE = {
     "license": {"spdx_id": "Apache-2.0"},
     "robotics_domains": ["navigation", "amr", "ground"],
     "capabilities": ["path-planning", "slam", "obstacle-avoidance"],
-    "platforms": {
-        "operating_systems": ["Ubuntu 24.04"],
-        "ros_versions": ["Jazzy", "Humble"],
-        "cpu_architectures": ["x86_64", "arm64"]
-    },
-    "evidence": {"level": "ci_verified"}
+    "platforms": {"operating_systems": ["Ubuntu 24.04"], "ros_versions": ["Jazzy", "Humble"], "cpu_architectures": ["x86_64", "arm64"]},
+    "evidence": {"level": "ci_verified"},
 }
 
 SAMPLE_ARM_RESOURCE = {
@@ -30,12 +26,10 @@ SAMPLE_ARM_RESOURCE = {
     "license": {"spdx_id": "BSD-3-Clause"},
     "robotics_domains": ["manipulation", "arms"],
     "capabilities": ["real-time-control", "servo-control"],
-    "platforms": {
-        "operating_systems": ["Ubuntu 24.04"],
-        "ros_versions": ["Jazzy"]
-    },
-    "evidence": {"level": "upstream_declared"}
+    "platforms": {"operating_systems": ["Ubuntu 24.04"], "ros_versions": ["Jazzy"]},
+    "evidence": {"level": "upstream_declared"},
 }
+
 
 @pytest.mark.asyncio
 async def test_list_resources_empty(client: AsyncClient):
@@ -43,6 +37,7 @@ async def test_list_resources_empty(client: AsyncClient):
     assert response.status_code == 200
     assert response.json() == []
     assert response.headers.get("X-Total-Count") == "0"
+
 
 @pytest.mark.asyncio
 async def test_create_and_get_resource(client: AsyncClient):
@@ -61,6 +56,7 @@ async def test_create_and_get_resource(client: AsyncClient):
     assert get_data["name"] == "Nav Core Package"
     assert get_data["platforms"]["ros_versions"] == ["Jazzy", "Humble"]
 
+
 @pytest.mark.asyncio
 async def test_create_duplicate_conflict(client: AsyncClient):
     res1 = await client.post("/api/v1/resources", json=SAMPLE_RESOURCE)
@@ -70,20 +66,20 @@ async def test_create_duplicate_conflict(client: AsyncClient):
     assert res2.status_code == 409
     assert "already exists" in res2.json()["detail"]
 
+
 @pytest.mark.asyncio
 async def test_get_nonexistent_resource_404(client: AsyncClient):
     res = await client.get("/api/v1/resources/nonexistent/package-id")
     assert res.status_code == 404
     assert "not found" in res.json()["detail"].lower()
 
+
 @pytest.mark.asyncio
 async def test_create_invalid_manifest_422(client: AsyncClient):
-    invalid_manifest = {
-        "id": "invalid_no_slash_namespace",
-        "name": "Invalid"
-    }
+    invalid_manifest = {"id": "invalid_no_slash_namespace", "name": "Invalid"}
     res = await client.post("/api/v1/resources", json=invalid_manifest)
     assert res.status_code == 422
+
 
 @pytest.mark.asyncio
 async def test_search_and_filtering(client: AsyncClient):
@@ -129,6 +125,7 @@ async def test_search_and_filtering(client: AsyncClient):
     offset_res = await client.get("/api/v1/resources?limit=1&offset=1")
     assert offset_res.status_code == 200
     assert len(offset_res.json()) == 1
+
 
 @pytest.mark.asyncio
 async def test_database_isolation(client: AsyncClient):

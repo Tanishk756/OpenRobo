@@ -20,14 +20,16 @@ VALID_PREDICATES = {
     "used-by",
     "part-of",
     "alternative-to",
-    "derived-from"
+    "derived-from",
 }
+
 
 class GraphEdgeData(BaseModel):
     subject_id: str
     predicate: str
     object_id: str
     properties: Optional[Dict[str, Any]] = None
+
 
 class OpenRoboGraph:
     def __init__(self):
@@ -39,12 +41,7 @@ class OpenRoboGraph:
     def add_edge(self, edge: GraphEdgeData):
         if edge.predicate not in VALID_PREDICATES:
             raise ValueError(f"Invalid predicate '{edge.predicate}'. Must be one of {VALID_PREDICATES}")
-        self.graph.add_edge(
-            edge.subject_id,
-            edge.object_id,
-            predicate=edge.predicate,
-            **(edge.properties or {})
-        )
+        self.graph.add_edge(edge.subject_id, edge.object_id, predicate=edge.predicate, **(edge.properties or {}))
 
     def get_dependencies(self, node_id: str) -> List[str]:
         if node_id not in self.graph:

@@ -9,8 +9,10 @@ class GraphEdgeBase(BaseModel):
     object_id: str = Field(..., json_schema_extra={"example": "ros-controls/ros2_control"})
     properties: Optional[Dict[str, Any]] = None
 
+
 class GraphEdgeCreate(GraphEdgeBase):
     pass
+
 
 class GraphEdgeRead(GraphEdgeBase):
     id: int

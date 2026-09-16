@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
@@ -9,6 +9,7 @@ from apps.api.database import Base
 
 def utc_now():
     return datetime.now(timezone.utc)
+
 
 class ResourceModel(Base):
     __tablename__ = "resources"
@@ -31,6 +32,7 @@ class ResourceModel(Base):
 
     versions: Mapped[List["ResourceVersionModel"]] = relationship(back_populates="resource", cascade="all, delete-orphan")
 
+
 class ResourceVersionModel(Base):
     __tablename__ = "resource_versions"
 
@@ -42,6 +44,7 @@ class ResourceVersionModel(Base):
 
     resource: Mapped["ResourceModel"] = relationship(back_populates="versions")
 
+
 class DomainModel(Base):
     __tablename__ = "domains"
 
@@ -49,11 +52,13 @@ class DomainModel(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     parent_id: Mapped[Optional[str]] = mapped_column(String(100), ForeignKey("domains.id"), nullable=True)
 
+
 class CapabilityModel(Base):
     __tablename__ = "capabilities"
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+
 
 class StackManifestModel(Base):
     __tablename__ = "stack_manifests"

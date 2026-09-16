@@ -82,7 +82,7 @@ class GithubIngestionRequest(BaseModel):
     repository_url: str = Field(
         ...,
         description="Public GitHub repository URL (e.g. https://github.com/ros-navigation/navigation2)",
-        examples=["https://github.com/ros-navigation/navigation2"]
+        examples=["https://github.com/ros-navigation/navigation2"],
     )
     force_refresh: bool = Field(default=False, description="Force update even if revision matches")
 

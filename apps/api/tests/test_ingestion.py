@@ -1,4 +1,4 @@
-﻿from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -130,7 +130,7 @@ def test_manifest_builder_monorepo():
         license="Apache-2.0",
         build_depends=["rclcpp"],
         exec_depends=["rclcpp"],
-        rel_path="nav2_amcl/package.xml"
+        rel_path="nav2_amcl/package.xml",
     )
 
     evidence = RepoInspectionEvidence(
@@ -144,7 +144,7 @@ def test_manifest_builder_monorepo():
         has_package_xml=True,
         packages=[pkg1, pkg2],
         build_systems=["cmake"],
-        robotics_markers=["ros_package", "ros_launch"]
+        robotics_markers=["ros_package", "ros_launch"],
     )
 
     candidates = build_candidate_manifests(evidence)
@@ -175,13 +175,13 @@ async def test_ingestion_service_with_mock_github(db_session):
         "topics": ["slam", "mapping", "ros2", "lidar"],
         "language": "C++",
         "homepage": "https://slam-toolbox.org",
-        "license": {"spdx_id": "LGPL-3.0-only"}
+        "license": {"spdx_id": "LGPL-3.0-only"},
     }
     mock_client.get_head_commit_sha.return_value = "9876543210abcdef"
     mock_client.get_repository_tree.return_value = [
         {"path": "package.xml", "type": "blob"},
         {"path": "CMakeLists.txt", "type": "blob"},
-        {"path": "launch/slam.launch.py", "type": "blob"}
+        {"path": "launch/slam.launch.py", "type": "blob"},
     ]
     mock_client.get_raw_file_content.return_value = """<package format="3">
       <name>slam_toolbox</name>
@@ -195,10 +195,7 @@ async def test_ingestion_service_with_mock_github(db_session):
     service = IngestionService(client=mock_client)
 
     # First ingestion -> CREATED
-    resp = await service.ingest_github_repository(
-        db=db_session,
-        repository_url="https://github.com/SteveMacenski/slam_toolbox"
-    )
+    resp = await service.ingest_github_repository(db=db_session, repository_url="https://github.com/SteveMacenski/slam_toolbox")
 
     assert resp.repository == "SteveMacenski/slam_toolbox"
     assert resp.revision == "9876543210abcdef"
@@ -217,10 +214,7 @@ async def test_ingestion_service_with_mock_github(db_session):
     assert res.metadata_json["provenance"]["source_identifier"] == "SteveMacenski/slam_toolbox"
 
     # Second ingestion -> IDEMPOTENT UPDATED
-    resp2 = await service.ingest_github_repository(
-        db=db_session,
-        repository_url="https://github.com/SteveMacenski/slam_toolbox"
-    )
+    resp2 = await service.ingest_github_repository(db=db_session, repository_url="https://github.com/SteveMacenski/slam_toolbox")
     assert resp2.resources_created == 0
     assert resp2.resources_updated == 1
     assert resp2.resources[0].action == IngestionAction.UPDATED
@@ -230,10 +224,7 @@ async def test_ingestion_service_with_mock_github(db_session):
 async def test_ingestion_api_endpoint(db_session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # 1. Invalid SSRF URL -> 400 Bad Request
-        ssrf_resp = await client.post(
-            "/api/v1/ingestion/github",
-            json={"repository_url": "https://127.0.0.1/private/repo"}
-        )
+        ssrf_resp = await client.post("/api/v1/ingestion/github", json={"repository_url": "https://127.0.0.1/private/repo"})
         assert ssrf_resp.status_code == 400
         assert "Invalid repository host" in ssrf_resp.json()["detail"] or "prohibited" in ssrf_resp.json()["detail"]
 
@@ -257,16 +248,13 @@ async def test_ingestion_api_endpoint(db_session):
                         "action": "created",
                         "validation_status": "VALID",
                         "provenance": {"source_provider": "github"},
-                        "errors": []
+                        "errors": [],
                     }
-                ]
+                ],
             }
             MockServiceClass.return_value = mock_inst
 
-            resp = await client.post(
-                "/api/v1/ingestion/github",
-                json={"repository_url": "https://github.com/ros2/ros2_tracing"}
-            )
+            resp = await client.post("/api/v1/ingestion/github", json={"repository_url": "https://github.com/ros2/ros2_tracing"})
             assert resp.status_code == 200
             data = resp.json()
             assert data["repository"] == "ros2/ros2_tracing"
@@ -282,8 +270,5 @@ async def test_ingestion_api_upstream_error_handling(db_session):
             mock_inst.ingest_github_repository.side_effect = GitHubAPIError("Repository not found", status_code=404)
             MockServiceClass.return_value = mock_inst
 
-            resp = await client.post(
-                "/api/v1/ingestion/github",
-                json={"repository_url": "https://github.com/unknown/nonexistent"}
-            )
+            resp = await client.post("/api/v1/ingestion/github", json={"repository_url": "https://github.com/unknown/nonexistent"})
             assert resp.status_code == 404

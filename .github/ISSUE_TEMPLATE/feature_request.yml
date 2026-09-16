@@ -1,0 +1,35 @@
+﻿name: Feature Request
+description: Propose a new feature, resource manifest schema extension, or robotics domain
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a new idea or enhancement for OpenRobo!
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: Is your feature request related to a problem or specific robotics development workflow?
+      placeholder: I encounter difficulties when trying to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution / Capability
+      description: Describe what you want to happen and how it should work.
+    validations:
+      required: true
+  - type: textarea
+    id: robotics-context
+    attributes:
+      label: Robotics Ecosystem Context
+      description: Specify relevant robotics frameworks, hardware targets, ROS 2 distros, or simulators (e.g. ROS 2 Jazzy, Gazebo Harmonic, MoveIt 2).
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you have considered.

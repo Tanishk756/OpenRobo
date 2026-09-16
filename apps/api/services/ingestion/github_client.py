@@ -1,4 +1,4 @@
-﻿import ipaddress
+import ipaddress
 import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
@@ -49,9 +49,7 @@ def validate_and_parse_github_url(url: str) -> tuple[str, str]:
 
     path_parts = [p for p in parsed.path.strip("/").split("/") if p]
     if len(path_parts) < 2:
-        raise IngestionSecurityError(
-            "Invalid GitHub repository URL format. Expected 'https://github.com/owner/repository'."
-        )
+        raise IngestionSecurityError("Invalid GitHub repository URL format. Expected 'https://github.com/owner/repository'.")
 
     owner = path_parts[0]
     repo = path_parts[1]
@@ -67,21 +65,13 @@ def validate_and_parse_github_url(url: str) -> tuple[str, str]:
 
 
 class GitHubClient:
-    def __init__(
-        self,
-        token: Optional[str] = None,
-        timeout: float = REQUEST_TIMEOUT_SECONDS,
-        client: Optional[httpx.AsyncClient] = None
-    ):
+    def __init__(self, token: Optional[str] = None, timeout: float = REQUEST_TIMEOUT_SECONDS, client: Optional[httpx.AsyncClient] = None):
         self.token = token
         self.timeout = timeout
         self._external_client = client
 
     def _get_headers(self) -> Dict[str, str]:
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "OpenRobo-Registry-Ingestion/0.1.0"
-        }
+        headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "OpenRobo-Registry-Ingestion/0.1.0"}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
@@ -101,13 +91,10 @@ class GitHubClient:
         elif resp.status_code in (403, 429):
             raise GitHubAPIError(
                 f"GitHub API rate limit exceeded while accessing '{owner}/{repo}'. Provide GITHUB_TOKEN for higher limits.",
-                status_code=resp.status_code
+                status_code=resp.status_code,
             )
         elif resp.status_code != 200:
-            raise GitHubAPIError(
-                f"GitHub API returned error {resp.status_code}: {resp.text[:200]}",
-                status_code=resp.status_code
-            )
+            raise GitHubAPIError(f"GitHub API returned error {resp.status_code}: {resp.text[:200]}", status_code=resp.status_code)
 
         return resp.json()
 
@@ -158,9 +145,7 @@ class GitHubClient:
 
         if resp.status_code == 200:
             if len(resp.content) > MAX_FILE_SIZE_BYTES:
-                raise IngestionSecurityError(
-                    f"File '{file_path}' exceeds maximum allowable size of {MAX_FILE_SIZE_BYTES} bytes."
-                )
+                raise IngestionSecurityError(f"File '{file_path}' exceeds maximum allowable size of {MAX_FILE_SIZE_BYTES} bytes.")
             return resp.text
         elif resp.status_code == 404:
             raise GitHubAPIError(f"File '{file_path}' not found in repository '{owner}/{repo}'.", status_code=404)
