@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+﻿from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
@@ -21,6 +21,10 @@ class ResourceModel(Base):
     spdx_license_id: Mapped[str] = mapped_column(String(100), nullable=False, default="NOASSERTION", index=True)
     repo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     evidence_level: Mapped[str] = mapped_column(String(50), nullable=False, default="unknown")
+    robotics_domains: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
+    capabilities: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
+    platforms: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

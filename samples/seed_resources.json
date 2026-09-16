@@ -1,0 +1,887 @@
+[
+  {
+    "id": "ros-controls/ros2_control",
+    "name": "ros2_control Framework",
+    "version": "4.15.0",
+    "type": "ros_package",
+    "summary": "Real-time robot control architecture for ROS 2",
+    "description": "A set of software packages for real-time control of robots using ROS 2, managing hardware interfaces, controllers, and transmission interfaces.",
+    "source": {
+      "repo_url": "https://github.com/ros-controls/ros2_control",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "control",
+      "manipulation",
+      "amr"
+    ],
+    "capabilities": [
+      "real-time-control",
+      "hardware-interface",
+      "transmission-interface",
+      "joint-trajectory-control"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble",
+        "Rolling"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified",
+      "notes": "Upstream ROS 2 continuous integration active"
+    }
+  },
+  {
+    "id": "ros-navigation/nav2",
+    "name": "Nav2 Autonomous Navigation Framework",
+    "version": "1.3.0",
+    "type": "ros_package",
+    "summary": "ROS 2 Navigation Framework for Autonomous Mobile Robots",
+    "description": "Production-grade navigation framework providing behavior trees, path planning, costmaps, controller plugins, and recovery behaviors.",
+    "source": {
+      "repo_url": "https://github.com/ros-navigation/navigation2",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "navigation",
+      "amr",
+      "ground"
+    ],
+    "capabilities": [
+      "path-planning",
+      "obstacle-avoidance",
+      "recovery-behaviors",
+      "bt-navigator",
+      "costmap-2d"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "stevemacenski/slam_toolbox",
+    "name": "SLAM Toolbox",
+    "version": "2.7.2",
+    "type": "ros_package",
+    "summary": "Lifelong 2D SLAM and localization for mobile robotics",
+    "description": "A set of tools and capabilities for 2D SLAM in large-scale environments, supporting synchronous and asynchronous mapping.",
+    "source": {
+      "repo_url": "https://github.com/SteveMacenski/slam_toolbox",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "LGPL-2.1-only"
+    },
+    "robotics_domains": [
+      "mapping",
+      "localization",
+      "amr"
+    ],
+    "capabilities": [
+      "2d-slam",
+      "pose-graph-optimization",
+      "lifelong-mapping",
+      "ceres-solver"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "ros-planning/moveit2",
+    "name": "MoveIt 2 Motion Planning Framework",
+    "version": "2.9.0",
+    "type": "framework",
+    "summary": "Mobile manipulation and motion planning framework for ROS 2",
+    "description": "Primary manipulation framework for robotics, incorporating inverse kinematics, 3D perception collision avoidance, trajectory generation, and OMPL.",
+    "source": {
+      "repo_url": "https://github.com/ros-planning/moveit2",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "BSD-3-Clause"
+    },
+    "robotics_domains": [
+      "manipulation",
+      "arms",
+      "motion-planning"
+    ],
+    "capabilities": [
+      "kinematics",
+      "collision-checking",
+      "trajectory-generation",
+      "ompl-integration",
+      "servo-control"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "gazebosim/gz-sim",
+    "name": "Gazebo Sim (Harmonic)",
+    "version": "8.6.0",
+    "type": "simulation",
+    "summary": "Open-source 3D robotics simulator",
+    "description": "High-fidelity dynamic simulation environment for robotics platforms, supporting multiple physics engines (ODE, Bullet, DART) and realistic sensor rendering.",
+    "source": {
+      "repo_url": "https://github.com/gazebosim/gz-sim",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "simulation",
+      "physics",
+      "sensor-simulation"
+    ],
+    "capabilities": [
+      "rigid-body-dynamics",
+      "sensor-simulation",
+      "distributed-simulation",
+      "ogre-rendering"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11",
+        "macOS"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "upstream_declared"
+    }
+  },
+  {
+    "id": "ros2/rviz2",
+    "name": "RViz 2 Visualizer",
+    "version": "14.1.0",
+    "type": "tool",
+    "summary": "3D visualization tool for ROS 2",
+    "description": "Standard 3D visualizer for sensor streams, robot models, transformation frames, point clouds, laser scans, and interactive marker telemetry.",
+    "source": {
+      "repo_url": "https://github.com/ros2/rviz",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "BSD-3-Clause"
+    },
+    "robotics_domains": [
+      "visualization",
+      "telemetry",
+      "debugging"
+    ],
+    "capabilities": [
+      "3d-visualization",
+      "pointcloud-display",
+      "tf-display",
+      "interactive-markers",
+      "camera-overlay"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11",
+        "macOS"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble",
+        "Rolling"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "facontidavide/plotjuggler",
+    "name": "PlotJuggler",
+    "version": "3.8.8",
+    "type": "tool",
+    "summary": "Fast, intuitive time-series visualization and rosbag analysis tool",
+    "description": "Real-time robotics data plotter supporting custom math transforms, ROS/ROS 2 pub-sub, MCAP rosbag inspection, CSV, and UDP streaming.",
+    "source": {
+      "repo_url": "https://github.com/facontidavide/PlotJuggler",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "MPL-2.0"
+    },
+    "robotics_domains": [
+      "visualization",
+      "telemetry",
+      "logging"
+    ],
+    "capabilities": [
+      "time-series-plotting",
+      "rosbag-playback",
+      "custom-transforms",
+      "udp-streaming",
+      "mcap-support"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble",
+        "Rolling"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "robotis/turtlebot3",
+    "name": "TurtleBot3 Platform Stack",
+    "version": "2.1.5",
+    "type": "robot",
+    "summary": "Standard educational and research mobile robotics platform",
+    "description": "Comprehensive hardware and software stack for TurtleBot3 Burger/Waffle, including URDF descriptions, drivers, SLAM configurations, and Nav2 profiles.",
+    "source": {
+      "repo_url": "https://github.com/ROBOTIS-GIT/turtlebot3",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "amr",
+      "education",
+      "research"
+    ],
+    "capabilities": [
+      "differential-drive",
+      "lidar-slam",
+      "waypoint-navigation",
+      "open-hardware",
+      "urdf-models"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "arm64",
+        "x86_64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "intel-realsense/realsense-ros",
+    "name": "Intel RealSense ROS 2 Wrapper",
+    "version": "4.55.1",
+    "type": "driver",
+    "summary": "ROS 2 camera driver for Intel RealSense D400 and LiDAR L500 series",
+    "description": "Publishes aligned RGB, Depth, Infrared, IMU and point cloud streams from Intel RealSense depth sensors with hardware timestamp synchronization.",
+    "source": {
+      "repo_url": "https://github.com/IntelRealSense/realsense-ros",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "perception",
+      "sensors",
+      "vision"
+    ],
+    "capabilities": [
+      "rgbd-streaming",
+      "pointcloud-generation",
+      "depth-filtering",
+      "imu-integration",
+      "temporal-filtering"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "upstream_declared"
+    }
+  },
+  {
+    "id": "luxonis/depthai-ros",
+    "name": "DepthAI ROS 2 Driver",
+    "version": "2.9.0",
+    "type": "driver",
+    "summary": "ROS 2 wrapper for OAK-D spatial AI and stereo cameras",
+    "description": "On-chip AI perception driver for Luxonis OAK-D cameras, publishing stereo disparity, spatial object detection, and feature tracking directly from Myriad X / Keem Bay.",
+    "source": {
+      "repo_url": "https://github.com/luxonis/depthai-ros",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "MIT"
+    },
+    "robotics_domains": [
+      "perception",
+      "sensors",
+      "edge-ai"
+    ],
+    "capabilities": [
+      "stereo-depth",
+      "on-chip-inference",
+      "spatial-ai",
+      "tracking",
+      "rgbd-pointcloud"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "upstream_declared"
+    }
+  },
+  {
+    "id": "nvidia/isaac_ros_nvblox",
+    "name": "Isaac ROS Nvblox",
+    "version": "3.1.0",
+    "type": "ros_package",
+    "summary": "GPU-accelerated real-time 3D volumetric mapping and ESDF generation",
+    "description": "CUDA-accelerated 3D TSDF and ESDF reconstruction package optimized for NVIDIA Jetson platforms, converting depth streams into real-time obstacle distance fields.",
+    "source": {
+      "repo_url": "https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_nvblox",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "perception",
+      "mapping",
+      "gpu-acceleration"
+    ],
+    "capabilities": [
+      "3d-reconstruction",
+      "nvblox-tsdf",
+      "esdf-mapping",
+      "cuda-acceleration",
+      "occupancy-grid"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 22.04",
+        "Ubuntu 24.04"
+      ],
+      "ros_versions": [
+        "Humble",
+        "Jazzy"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "eclipse-cyclonedds/cyclonedds",
+    "name": "Eclipse Cyclone DDS",
+    "version": "0.10.4",
+    "type": "protocol",
+    "summary": "High-performance OMG DDS implementation and ROS 2 middleware",
+    "description": "Tier-1 OMG Data Distribution Service (DDS) implementation providing high-throughput zero-copy shared memory communication for distributed robotics systems.",
+    "source": {
+      "repo_url": "https://github.com/eclipse-cyclonedds/cyclonedds",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "EPL-2.0"
+    },
+    "robotics_domains": [
+      "middleware",
+      "networking",
+      "dds"
+    ],
+    "capabilities": [
+      "rmw-implementation",
+      "zero-copy-transport",
+      "qos-policies",
+      "dds-security",
+      "dynamic-discovery"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11",
+        "macOS"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "eprosima/fast-dds",
+    "name": "eProsima Fast DDS",
+    "version": "2.14.2",
+    "type": "protocol",
+    "summary": "High-performance C++ DDS middleware",
+    "description": "Standard ROS 2 middleware implementation featuring dynamic discovery servers, shared memory transport, and low-latency real-time pub/sub capabilities.",
+    "source": {
+      "repo_url": "https://github.com/eProsima/Fast-DDS",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "middleware",
+      "networking",
+      "dds"
+    ],
+    "capabilities": [
+      "discovery-server",
+      "shared-memory-transport",
+      "real-time-publish-subscribe",
+      "security-plugins"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "opencv/opencv",
+    "name": "OpenCV Computer Vision Library",
+    "version": "4.10.0",
+    "type": "library",
+    "summary": "Open Source Computer Vision and Machine Learning Library",
+    "description": "The foundational robotics vision library, containing 2500+ optimized algorithms for feature detection, camera calibration, optical flow, and stereoscopy.",
+    "source": {
+      "repo_url": "https://github.com/opencv/opencv",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "perception",
+      "vision",
+      "image-processing"
+    ],
+    "capabilities": [
+      "feature-detection",
+      "camera-calibration",
+      "optical-flow",
+      "stereo-matching",
+      "dnn-inference"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11",
+        "macOS"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "upstream_declared"
+    }
+  },
+  {
+    "id": "pytorch/pytorch",
+    "name": "PyTorch ML Framework",
+    "version": "2.4.0",
+    "type": "framework",
+    "summary": "Tensors and dynamic neural networks with strong GPU acceleration",
+    "description": "Primary machine learning framework for robot learning, reinforcement learning policies, foundation models, and embodied AI deployments.",
+    "source": {
+      "repo_url": "https://github.com/pytorch/pytorch",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "BSD-3-Clause"
+    },
+    "robotics_domains": [
+      "ai_model",
+      "learning",
+      "reinforcement-learning"
+    ],
+    "capabilities": [
+      "tensor-computation",
+      "autograd",
+      "robot-learning",
+      "torchscript",
+      "onnx-export"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "upstream_declared"
+    }
+  },
+  {
+    "id": "ros-perception/image_pipeline",
+    "name": "ROS 2 Image Pipeline",
+    "version": "3.0.1",
+    "type": "ros_package",
+    "summary": "Image processing pipeline nodes for camera calibration and rectification",
+    "description": "Standard processing pipeline for monocular and stereo cameras in ROS 2, providing camera calibration GUI, image rectification, and depth processing.",
+    "source": {
+      "repo_url": "https://github.com/ros-perception/image_pipeline",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "perception",
+      "vision",
+      "camera"
+    ],
+    "capabilities": [
+      "image-rectification",
+      "camera-calibration-nodes",
+      "depth-image-processing",
+      "stereo-image-proc"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "cyberbotics/webots",
+    "name": "Webots Robot Simulator",
+    "version": "2023.1.0",
+    "type": "simulation",
+    "summary": "Open-source robot simulation package with extensive robot library",
+    "description": "Fast and customizable simulation platform providing a comprehensive library of articulated robots, sensors, actuators, and direct ROS 2 interfaces.",
+    "source": {
+      "repo_url": "https://github.com/cyberbotics/webots",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "simulation",
+      "physics",
+      "robot-modeling"
+    ],
+    "capabilities": [
+      "ode-physics",
+      "robot-prototyping",
+      "ros2-supervisor",
+      "multi-robot-simulation",
+      "sensor-modeling"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11",
+        "macOS"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "upstream_declared"
+    }
+  },
+  {
+    "id": "micro-ros/micro_ros_setup",
+    "name": "micro-ROS Embedded Stack",
+    "version": "3.1.0",
+    "type": "firmware",
+    "summary": "ROS 2 for microcontrollers and deeply embedded hardware",
+    "description": "Brings ROS 2 into resource-constrained microcontrollers (STM32, ESP32, Teensy, Raspberry Pi Pico) running FreeRTOS, Zephyr, or bare-metal.",
+    "source": {
+      "repo_url": "https://github.com/micro-ROS/micro_ros_setup",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "embedded",
+      "microcontrollers",
+      "real-time"
+    ],
+    "capabilities": [
+      "micro-xrce-dds",
+      "freertos-support",
+      "zephyr-support",
+      "stm32-esp32",
+      "low-memory-footprint"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "arm32",
+        "arm64",
+        "riscv"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "universal-robots/universal_robots_ros2_driver",
+    "name": "Universal Robots ROS 2 Driver",
+    "version": "2.4.0",
+    "type": "driver",
+    "summary": "ROS 2 driver for Universal Robots (CB3 and e-Series) manipulators",
+    "description": "Industrial driver providing scaled trajectory control, real-time feedback, dashboard service integration, and Cartesian compliance for UR3, UR5, UR10, UR16, UR20, and UR30.",
+    "source": {
+      "repo_url": "https://github.com/UniversalRobots/Universal_Robots_ROS2_Driver",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "manipulation",
+      "arms",
+      "industrial"
+    ],
+    "capabilities": [
+      "scaled-joint-trajectory-controller",
+      "speed-scaling-interface",
+      "force-torque-sensor-broadcaster",
+      "dashboard-client"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "ci_verified"
+    }
+  },
+  {
+    "id": "sickag/sick_scan_xd",
+    "name": "SICK LiDAR ROS 2 Driver",
+    "version": "3.3.0",
+    "type": "driver",
+    "summary": "Universal ROS 2 driver for SICK 2D and 3D LiDAR sensors",
+    "description": "Standard sensor driver for SICK LMS, MRS, TiM, NAV, and safety scanners, publishing PointCloud2, LaserScan, and safety zone diagnostic signals.",
+    "source": {
+      "repo_url": "https://github.com/SICKAG/sick_scan_xd",
+      "vcs_type": "git"
+    },
+    "license": {
+      "spdx_id": "Apache-2.0"
+    },
+    "robotics_domains": [
+      "sensors",
+      "lidar",
+      "safety"
+    ],
+    "capabilities": [
+      "2d-lidar",
+      "3d-lidar",
+      "safety-fields",
+      "pointcloud2-publisher",
+      "intensity-data"
+    ],
+    "platforms": {
+      "operating_systems": [
+        "Ubuntu 24.04",
+        "Ubuntu 22.04",
+        "Windows 11"
+      ],
+      "ros_versions": [
+        "Jazzy",
+        "Humble"
+      ],
+      "cpu_architectures": [
+        "x86_64",
+        "arm64"
+      ]
+    },
+    "evidence": {
+      "level": "upstream_declared"
+    }
+  }
+]
