@@ -3,7 +3,7 @@
 Open-source robotics commons: discover, build, simulate, deploy, and contribute.
 
 ## Status
-**Milestone 1 — Registry Engine & Resource Discovery** (In Progress / Baseline Delivered).
+**Milestone 1 — Registry Engine & Resource Discovery** (VERIFIED & COMPLETE).
 
 ## Core Principles
 - Free to use
@@ -36,5 +36,16 @@ pnpm run check
 - **Backend API**: `pnpm run dev:api` (Runs FastAPI at `http://localhost:8000`)
 - **Web Frontend**: `pnpm run dev:web` (Runs Next.js at `http://localhost:3000`)
 - **Seed Registry Data**: `pnpm run seed`
+
+### 4. Ingest Robotics Repositories
+```bash
+# CLI ingestion
+openrobo ingest github https://github.com/ros-navigation/navigation2
+
+# REST API ingestion
+curl -X POST http://localhost:8000/api/v1/ingestion/github \
+  -H "Content-Type: application/json" \
+  -d '{"repository_url": "https://github.com/ros-navigation/navigation2"}'
+```
 
 For detailed setup instructions on both Windows and Linux, see [`docs/LOCAL_DEVELOPMENT.md`](docs/LOCAL_DEVELOPMENT.md).

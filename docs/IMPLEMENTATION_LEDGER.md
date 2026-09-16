@@ -30,7 +30,7 @@ Statuses: `NOT_STARTED` | `PLANNED` | `IN_PROGRESS` | `BLOCKED` | `IMPLEMENTED` 
 | **REQ-M1-01** | Resource JSON Schema Validation | **VERIFIED** | JSON Schema draft 2020-12 verification in API and CLI | Schema unit tests | `scripts/validate_schemas.py` | None | Maintain canonical schemas |
 | **REQ-M1-02** | Database Models & Alembic Migrations | **VERIFIED** | SQLAlchemy 2.x async models for Resources, Graph, Domains, Capabilities | Pytest DB tests | `apps/api/models/` & `alembic/` | None | Extend with future relational entities |
 | **REQ-M1-03** | Registry REST API (CRUD + List) | **VERIFIED** | FastAPI `/api/v1/resources` endpoints with multi-filter and deterministic pagination | Pytest suite | `apps/api/routers/resources.py` | None | Connect full-text search in M2 |
-| **REQ-M1-04** | GitHub Ingestion Service | `PLANNED` | Safe static AST/package.xml manifest extractor (metadata registry only) | Ingestion mock tests | Pending | Rate limits on unauthenticated API calls | Implement ingestion pipeline |
+| **REQ-M1-04** | GitHub Ingestion Service | **VERIFIED** | Static AST, package.xml parser, SSRF protection, manifest builder & API | Ingestion & XML tests (8 tests) | `apps/api/services/ingestion/` & `apps/api/routers/ingestion.py` | None | Expand to GitLab/PyPI in future |
 | **REQ-M1-05** | Resource Discovery Web Interface | **VERIFIED** | Next.js 14 Resource Explorer at `/resources` with search, filters, card & drawer | Vitest / RTL | `apps/web/app/resources` | None | Connect graph visualizer in M3 |
 
 ---
