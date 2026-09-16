@@ -1,5 +1,7 @@
+from typing import Optional
+
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional, Dict, Any
+
 
 class SourceDetail(BaseModel):
     repo_url: Optional[str] = Field(default=None, json_schema_extra={"example": "https://github.com/ros-controls/ros2_control"})

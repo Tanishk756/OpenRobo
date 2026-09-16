@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "openrobo-workspace"
 version = "0.1.0"
-description = "OpenRobo Monorepo Workspace"
+description = "openrobo Monorepo Workspace"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -35,3 +35,4 @@ testpaths = [
 ]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

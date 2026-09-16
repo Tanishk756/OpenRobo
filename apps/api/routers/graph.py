@@ -1,9 +1,9 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, status
 from openrobo_schemas import validate_graph_edge
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.database import get_db
 from apps.api.models.graph import GraphEdgeModel, GraphNodeModel

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "openrobo-api"
 version = "0.1.0"
-description = "OpenRobo Core REST API Service"
+description = "openrobo Core REST API Service"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -30,5 +30,6 @@ include = ["*"]
 test = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
-    "httpx>=0.27.0"
+    "httpx>=0.27.0",
+    "aiosqlite>=0.20.0"
 ]

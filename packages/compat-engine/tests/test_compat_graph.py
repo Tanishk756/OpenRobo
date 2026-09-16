@@ -1,5 +1,6 @@
 import pytest
-from openrobo_compat import OpenRoboGraph, GraphEdgeData
+from openrobo_compat import GraphEdgeData, OpenRoboGraph
+
 
 def test_graph_add_edge_and_query():
     graph = OpenRoboGraph()

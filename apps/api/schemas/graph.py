@@ -1,5 +1,7 @@
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional, Dict, Any
+
 
 class GraphEdgeBase(BaseModel):
     subject_id: str = Field(..., json_schema_extra={"example": "ros-navigation/nav2"})
