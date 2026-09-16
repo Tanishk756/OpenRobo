@@ -1,50 +1,81 @@
 ﻿'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Navbar from '../../components/Navbar';
+import SearchAndFilters from '../../components/SearchAndFilters';
 import ResourceCard from '../../components/ResourceCard';
 import ResourceDetailDrawer from '../../components/ResourceDetailDrawer';
-import SearchAndFilters from '../../components/SearchAndFilters';
-import { fetchResources, ApiError } from '../../lib/api/client';
-import { Resource } from '../../lib/api/types';
+import { Resource, SearchResultHit, SearchFacetDistribution } from '../../lib/api/types';
+import { searchResources, fetchSearchFacets, ApiError } from '../../lib/api/client';
 
-export default function ResourcesPage() {
-  const [resources, setResources] = useState<Resource[]>([]);
+function ResourcesExplorerContent() {
+  const searchParams = useSearchParams();
+
+  // Read initial filter values from URL search params
+  const [searchQuery, setSearchQuery] = useState(searchParams?.get('q') || '');
+  const [selectedType, setSelectedType] = useState(searchParams?.get('type') || '');
+  const [selectedDomain, setSelectedDomain] = useState(searchParams?.get('domain') || '');
+  const [selectedEcosystem, setSelectedEcosystem] = useState(searchParams?.get('ecosystem') || '');
+
+  const [hits, setHits] = useState<SearchResultHit[]>([]);
+  const [facets, setFacets] = useState<SearchFacetDistribution | null>(null);
   const [total, setTotal] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('');
-  const [selectedEcosystem, setSelectedEcosystem] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+
+  // Sync state changes to browser URL query string without reloading page
+  const updateUrlParams = useCallback((q: string, type: string, domain: string, eco: string) => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams();
+    if (q.trim()) params.set('q', q.trim());
+    if (type) params.set('type', type);
+    if (domain) params.set('domain', domain);
+    if (eco) params.set('ecosystem', eco);
+
+    const queryStr = params.toString();
+    const targetUrl = queryStr ? `/resources?${queryStr}` : '/resources';
+    window.history.replaceState(null, '', targetUrl);
+  }, []);
 
   const loadResources = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await fetchResources({
-        q: searchQuery,
-        type: selectedType,
-        domain: selectedDomain,
-        ecosystem: selectedEcosystem,
+      const searchRes = await searchResources({
+        q: searchQuery.trim() || undefined,
+        type: selectedType || undefined,
+        domain: selectedDomain || undefined,
+        ecosystem: selectedEcosystem || undefined,
         limit: 50,
+        offset: 0,
       });
-      setResources(result.items);
-      setTotal(result.total);
-    } catch (err: any) {
-      setError(err instanceof ApiError ? err : new ApiError(err?.message || 'Failed to fetch resources'));
+
+      setHits(searchRes.items);
+      setTotal(searchRes.total);
+      if (searchRes.facets) {
+        setFacets(searchRes.facets);
+      } else {
+        const facetRes = await fetchSearchFacets(searchQuery.trim() || undefined);
+        setFacets(facetRes);
+      }
+    } catch (err) {
+      setError(err as ApiError);
+      setHits([]);
+      setTotal(0);
     } finally {
       setIsLoading(false);
     }
   }, [searchQuery, selectedType, selectedDomain, selectedEcosystem]);
 
   useEffect(() => {
+    updateUrlParams(searchQuery, selectedType, selectedDomain, selectedEcosystem);
     const timer = setTimeout(() => {
       loadResources();
     }, 200);
     return () => clearTimeout(timer);
-  }, [loadResources]);
+  }, [searchQuery, selectedType, selectedDomain, selectedEcosystem, loadResources, updateUrlParams]);
 
   const handleReset = () => {
     setSearchQuery('');
@@ -62,14 +93,14 @@ export default function ResourcesPage() {
         <div style={{ marginBottom: '2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
             <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Registry Explorer
+              Registry Explorer & Search
             </span>
           </div>
           <h1 style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.025em' }}>
             Robotics Component Registry
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', marginTop: '0.4rem', maxWidth: '800px' }}>
-            Discover, inspect, and evaluate open-source robotics packages, drivers, algorithms, simulation models, and platform dependencies.
+            Discover, inspect, and evaluate open-source robotics packages, drivers, algorithms, simulation models, and platform dependencies with PostgreSQL-backed full-text and fuzzy search.
           </p>
         </div>
 
@@ -83,6 +114,7 @@ export default function ResourcesPage() {
           onDomainChange={setSelectedDomain}
           selectedEcosystem={selectedEcosystem}
           onEcosystemChange={setSelectedEcosystem}
+          facets={facets}
           totalResults={total}
           onReset={handleReset}
         />
@@ -106,7 +138,7 @@ export default function ResourcesPage() {
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fca5a5' }}>
-                {error.isNetworkError ? 'Backend API Service Unreachable' : 'Registry Query Error'}
+                {error.isNetworkError ? 'Backend API Service Unreachable' : 'Search Query Error'}
               </h3>
             </div>
             <p style={{ color: '#e2e8f0', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1rem' }}>
@@ -128,6 +160,7 @@ export default function ResourcesPage() {
                 padding: '0.4rem 1rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
+                cursor: 'pointer',
               }}
             >
               Retry Connection
@@ -161,7 +194,7 @@ export default function ResourcesPage() {
         )}
 
         {/* Zero Results State */}
-        {!isLoading && !error && resources.length === 0 && (
+        {!isLoading && !error && hits.length === 0 && (
           <div
             style={{
               background: 'var(--panel-bg)',
@@ -183,7 +216,7 @@ export default function ResourcesPage() {
               No Robotics Resources Found
             </h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', maxWidth: '480px', margin: '0 auto 1.5rem' }}>
-              No manifests matched your search criteria. Try broadening your keyword or clearing active type/domain filters.
+              No manifests matched your search criteria. Try broadening your query or clearing active filters.
             </p>
             <button
               onClick={handleReset}
@@ -195,6 +228,7 @@ export default function ResourcesPage() {
                 padding: '0.5rem 1.25rem',
                 fontSize: '0.9rem',
                 fontWeight: 600,
+                cursor: 'pointer',
               }}
             >
               Reset All Filters
@@ -202,8 +236,8 @@ export default function ResourcesPage() {
           </div>
         )}
 
-        {/* Resource Grid */}
-        {!isLoading && !error && resources.length > 0 && (
+        {/* Resource Grid with Ranked Hits */}
+        {!isLoading && !error && hits.length > 0 && (
           <div
             style={{
               display: 'grid',
@@ -212,10 +246,12 @@ export default function ResourcesPage() {
             }}
             data-testid="resource-grid"
           >
-            {resources.map((res) => (
+            {hits.map((hit) => (
               <ResourceCard
-                key={res.id}
-                resource={res}
+                key={hit.resource.id}
+                resource={hit.resource}
+                score={hit.score}
+                highlights={hit.highlights}
                 onSelect={(r) => setSelectedResource(r)}
               />
             ))}
@@ -229,5 +265,13 @@ export default function ResourcesPage() {
         onClose={() => setSelectedResource(null)}
       />
     </div>
+  );
+}
+
+export default function ResourcesPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--bg-color)' }} />}>
+      <ResourcesExplorerContent />
+    </Suspense>
   );
 }

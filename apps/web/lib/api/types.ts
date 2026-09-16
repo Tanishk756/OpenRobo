@@ -56,6 +56,8 @@ export interface Resource {
   license?: LicenseDetail;
   evidence?: EvidenceDetail;
   metadata_json?: ResourceMetadata;
+  score?: number;
+  highlight?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -66,8 +68,12 @@ export interface ResourceQueryParams {
   domain?: string;
   capability?: string;
   ecosystem?: string;
+  license?: string;
+  ros_version?: string;
+  os?: string;
   limit?: number;
   offset?: number;
+  fuzzy?: boolean;
 }
 
 export interface ResourceListResult {
@@ -75,4 +81,27 @@ export interface ResourceListResult {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface SearchFacetDistribution {
+  types?: Record<string, number>;
+  domains?: Record<string, number>;
+  capabilities?: Record<string, number>;
+  licenses?: Record<string, number>;
+  ros_versions?: Record<string, number>;
+}
+
+export interface SearchResultHit {
+  resource: Resource;
+  score: number;
+  highlights: Record<string, string[]>;
+}
+
+export interface SearchResponse {
+  query?: string;
+  total: number;
+  limit: number;
+  offset: number;
+  items: SearchResultHit[];
+  facets: SearchFacetDistribution;
 }

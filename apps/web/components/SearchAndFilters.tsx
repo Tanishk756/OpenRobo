@@ -1,16 +1,18 @@
 ﻿'use client';
 
 import React from 'react';
+import { SearchFacetDistribution } from '../lib/api/types';
 
 interface SearchAndFiltersProps {
   searchQuery: string;
-  onSearchChange: (q: string) => void;
+  onSearchChange: (query: string) => void;
   selectedType: string;
-  onTypeChange: (t: string) => void;
+  onTypeChange: (type: string) => void;
   selectedDomain: string;
-  onDomainChange: (d: string) => void;
+  onDomainChange: (domain: string) => void;
   selectedEcosystem: string;
-  onEcosystemChange: (e: string) => void;
+  onEcosystemChange: (ecosystem: string) => void;
+  facets?: SearchFacetDistribution | null;
   totalResults: number;
   onReset: () => void;
 }
@@ -19,6 +21,7 @@ const TYPE_OPTIONS = [
   { label: 'All Types', value: '' },
   { label: 'ROS Packages', value: 'ros_package' },
   { label: 'Drivers', value: 'driver' },
+  { label: 'Sensors', value: 'sensor' },
   { label: 'Robots', value: 'robot' },
   { label: 'Simulation', value: 'simulation' },
   { label: 'Tools', value: 'tool' },
@@ -56,6 +59,7 @@ export default function SearchAndFilters({
   onDomainChange,
   selectedEcosystem,
   onEcosystemChange,
+  facets,
   totalResults,
   onReset,
 }: SearchAndFiltersProps) {
@@ -115,6 +119,7 @@ export default function SearchAndFilters({
               fontSize: '0.85rem',
               padding: '0.25rem 0.5rem',
               borderRadius: '4px',
+              cursor: 'pointer',
             }}
           >
             Clear
@@ -122,30 +127,51 @@ export default function SearchAndFilters({
         )}
       </div>
 
-      {/* Type Filter Buttons */}
+      {/* Type Filter Buttons with Dynamic Facet Counts */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontWeight: 600, marginRight: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Type:
         </span>
-        {TYPE_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => onTypeChange(opt.value)}
-            style={{
-              background: selectedType === opt.value ? 'var(--accent-cyan-glow)' : 'rgba(15, 23, 42, 0.5)',
-              border: `1px solid ${selectedType === opt.value ? 'var(--accent-cyan)' : 'var(--border-color)'}`,
-              color: selectedType === opt.value ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              borderRadius: '4px',
-              padding: '0.3rem 0.65rem',
-              fontSize: '0.8rem',
-              fontWeight: 500,
-              transition: 'all 0.15s ease',
-            }}
-            data-testid={`filter-type-${opt.value || 'all'}`}
-          >
-            {opt.label}
-          </button>
-        ))}
+        {TYPE_OPTIONS.map((opt) => {
+          const count = opt.value ? facets?.types?.[opt.value] : totalResults;
+          return (
+            <button
+              key={opt.value}
+              onClick={() => onTypeChange(opt.value)}
+              style={{
+                background: selectedType === opt.value ? 'var(--accent-cyan-glow)' : 'rgba(15, 23, 42, 0.5)',
+                border: `1px solid ${selectedType === opt.value ? 'var(--accent-cyan)' : 'var(--border-color)'}`,
+                color: selectedType === opt.value ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                borderRadius: '4px',
+                padding: '0.3rem 0.65rem',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              data-testid={`filter-type-${opt.value || 'all'}`}
+            >
+              <span>{opt.label}</span>
+              {count !== undefined && count > 0 && (
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    background: selectedType === opt.value ? 'var(--accent-cyan)' : 'rgba(51, 65, 85, 0.6)',
+                    color: selectedType === opt.value ? '#090d16' : 'var(--text-dim)',
+                    padding: '0.05rem 0.3rem',
+                    borderRadius: '10px',
+                    fontWeight: 600,
+                  }}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Domain & Ecosystem Dropdowns */}
@@ -170,11 +196,14 @@ export default function SearchAndFilters({
               }}
               data-testid="domain-select"
             >
-              {DOMAIN_OPTIONS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
+              {DOMAIN_OPTIONS.map((d) => {
+                const count = d.value ? facets?.domains?.[d.value] : undefined;
+                return (
+                  <option key={d.value} value={d.value}>
+                    {d.label} {count !== undefined ? `(${count})` : ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -208,7 +237,7 @@ export default function SearchAndFilters({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            <strong>{totalResults}</strong> {totalResults === 1 ? 'resource' : 'resources'} indexed
+            <strong>{totalResults}</strong> {totalResults === 1 ? 'resource' : 'resources'} matched
           </span>
 
           {hasActiveFilters && (
@@ -221,6 +250,7 @@ export default function SearchAndFilters({
                 borderRadius: '4px',
                 padding: '0.3rem 0.65rem',
                 fontSize: '0.8rem',
+                cursor: 'pointer',
               }}
               data-testid="reset-filters"
             >

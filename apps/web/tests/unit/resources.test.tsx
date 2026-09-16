@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ResourcesPage from '../../app/resources/page';
 import * as apiClient from '../../lib/api/client';
-import { Resource } from '../../lib/api/types';
+import { Resource, SearchResponse, SearchResultHit } from '../../lib/api/types';
 
 const MOCK_RESOURCES: Resource[] = [
   {
@@ -45,18 +45,40 @@ const MOCK_RESOURCES: Resource[] = [
   },
 ];
 
-describe('ResourcesPage (Resource Explorer)', () => {
+const MOCK_SEARCH_RESPONSE: SearchResponse = {
+  items: [
+    {
+      resource: MOCK_RESOURCES[0],
+      score: 8.5,
+      highlights: {
+        summary: ['Real-time robot <mark style="background: rgba(6, 182, 212, 0.3); color: #22d3ee; padding: 0 2px; border-radius: 2px;">control</mark> architecture for ROS 2'],
+      },
+    },
+    {
+      resource: MOCK_RESOURCES[1],
+      score: 1.2,
+      highlights: {},
+    },
+  ],
+  total: 2,
+  limit: 50,
+  offset: 0,
+  facets: {
+    types: { ros_package: 1, robot: 1 },
+    domains: { control: 1, manipulation: 1, amr: 1, education: 1 },
+    capabilities: { 'real-time-control': 1, 'differential-drive': 1 },
+    licenses: { 'Apache-2.0': 2 },
+    ros_versions: { Jazzy: 2, Humble: 1 },
+  },
+};
+
+describe('ResourcesPage (Resource Explorer & Search Engine)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('renders loading state then displays resource cards', async () => {
-    vi.spyOn(apiClient, 'fetchResources').mockResolvedValueOnce({
-      items: MOCK_RESOURCES,
-      total: 2,
-      limit: 50,
-      offset: 0,
-    });
+  it('renders loading state then displays ranked search hits and facet counts', async () => {
+    vi.spyOn(apiClient, 'searchResources').mockResolvedValueOnce(MOCK_SEARCH_RESPONSE);
 
     render(<ResourcesPage />);
     expect(screen.getByTestId('loading-state')).toBeInTheDocument();
@@ -69,12 +91,13 @@ describe('ResourcesPage (Resource Explorer)', () => {
     expect(screen.getByTestId('resource-card-ros-controls/ros2_control')).toBeInTheDocument();
   });
 
-  it('displays empty state when no resources match', async () => {
-    vi.spyOn(apiClient, 'fetchResources').mockResolvedValueOnce({
+  it('displays empty state when no search hits match', async () => {
+    vi.spyOn(apiClient, 'searchResources').mockResolvedValueOnce({
       items: [],
       total: 0,
       limit: 50,
       offset: 0,
+      facets: { types: {}, domains: {}, capabilities: {}, licenses: {}, ros_versions: {} },
     });
 
     render(<ResourcesPage />);
@@ -86,7 +109,7 @@ describe('ResourcesPage (Resource Explorer)', () => {
   });
 
   it('displays API error banner when backend is unreachable', async () => {
-    vi.spyOn(apiClient, 'fetchResources').mockRejectedValueOnce(
+    vi.spyOn(apiClient, 'searchResources').mockRejectedValueOnce(
       new apiClient.ApiError('Backend unreachable', undefined, true)
     );
 
@@ -99,12 +122,7 @@ describe('ResourcesPage (Resource Explorer)', () => {
   });
 
   it('opens detail drawer when a resource card is clicked and displays provenance', async () => {
-    vi.spyOn(apiClient, 'fetchResources').mockResolvedValueOnce({
-      items: MOCK_RESOURCES,
-      total: 2,
-      limit: 50,
-      offset: 0,
-    });
+    vi.spyOn(apiClient, 'searchResources').mockResolvedValueOnce(MOCK_SEARCH_RESPONSE);
 
     render(<ResourcesPage />);
 
@@ -134,11 +152,12 @@ describe('ResourcesPage (Resource Explorer)', () => {
   });
 
   it('triggers search query filtering when typing in search input', async () => {
-    const fetchSpy = vi.spyOn(apiClient, 'fetchResources').mockResolvedValue({
-      items: [MOCK_RESOURCES[0]],
+    const searchSpy = vi.spyOn(apiClient, 'searchResources').mockResolvedValue({
+      items: [MOCK_SEARCH_RESPONSE.items[0]],
       total: 1,
       limit: 50,
       offset: 0,
+      facets: MOCK_SEARCH_RESPONSE.facets,
     });
 
     render(<ResourcesPage />);
@@ -147,7 +166,7 @@ describe('ResourcesPage (Resource Explorer)', () => {
     fireEvent.change(searchInput, { target: { value: 'control' } });
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith(expect.objectContaining({ q: 'control' }));
+      expect(searchSpy).toHaveBeenCalledWith(expect.objectContaining({ q: 'control' }));
     });
   });
 });

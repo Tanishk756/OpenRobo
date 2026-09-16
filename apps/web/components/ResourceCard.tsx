@@ -5,6 +5,8 @@ import { Resource } from '../lib/api/types';
 
 interface ResourceCardProps {
   resource: Resource;
+  score?: number;
+  highlights?: Record<string, string[]>;
   onSelect: (resource: Resource) => void;
 }
 
@@ -31,10 +33,11 @@ export function getTypeBadgeClass(type: string): string {
   }
 }
 
-export default function ResourceCard({ resource, onSelect }: ResourceCardProps) {
+export default function ResourceCard({ resource, score, highlights, onSelect }: ResourceCardProps) {
   const osList = resource.platforms?.operating_systems || [];
   const rosList = resource.platforms?.ros_versions || [];
-  const archList = resource.platforms?.cpu_architectures || [];
+
+  const summaryHighlight = highlights?.summary?.[0] || highlights?.description?.[0];
 
   return (
     <article
@@ -64,14 +67,33 @@ export default function ResourceCard({ resource, onSelect }: ResourceCardProps) 
       data-testid={`resource-card-${resource.id}`}
     >
       <div>
-        {/* Top Header: ID & Type */}
+        {/* Top Header: ID & Type & Score */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.5rem' }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent-cyan)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {resource.id}
           </span>
-          <span className={`badge ${getTypeBadgeClass(resource.type)}`}>
-            {resource.type.replace('_', ' ')}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            {score !== undefined && score > 0 && (
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  fontFamily: 'var(--font-mono)',
+                  background: 'rgba(6, 182, 212, 0.15)',
+                  border: '1px solid rgba(6, 182, 212, 0.4)',
+                  color: 'var(--accent-cyan)',
+                  borderRadius: '4px',
+                  padding: '0.1rem 0.35rem',
+                  fontWeight: 600,
+                }}
+                title={`Relevance score: ${score.toFixed(2)}`}
+              >
+                match {Math.min(100, Math.round(score * 10))}%
+              </span>
+            )}
+            <span className={`badge ${getTypeBadgeClass(resource.type)}`}>
+              {resource.type.replace('_', ' ')}
+            </span>
+          </div>
         </div>
 
         {/* Resource Title */}
@@ -84,10 +106,17 @@ export default function ResourceCard({ resource, onSelect }: ResourceCardProps) 
           )}
         </h3>
 
-        {/* Summary */}
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.45', marginBottom: '0.75rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {resource.summary || resource.description || 'No description provided.'}
-        </p>
+        {/* Summary or Highlight */}
+        {summaryHighlight ? (
+          <p
+            style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.45', marginBottom: '0.75rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            dangerouslySetInnerHTML={{ __html: summaryHighlight }}
+          />
+        ) : (
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.45', marginBottom: '0.75rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {resource.summary || resource.description || 'No description provided.'}
+          </p>
+        )}
 
         {/* Domains & Capabilities */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.75rem' }}>
@@ -134,7 +163,7 @@ export default function ResourceCard({ resource, onSelect }: ResourceCardProps) 
           )}
           {resource.evidence_level && (
             <span className="badge badge-evidence">
-              ● {resource.evidence_level.replace('_', ' ')}
+              ✓ {resource.evidence_level.replace('_', ' ')}
             </span>
           )}
         </div>
