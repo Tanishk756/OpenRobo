@@ -6,11 +6,20 @@
   "license": "Apache-2.0",
   "scripts": {
     "dev": "pnpm --parallel run dev",
-    "build": "pnpm --recursive run build",
-    "lint": "pnpm --recursive run lint",
-    "test": "pnpm --recursive run test",
+    "dev:web": "pnpm --filter openrobo-web run dev",
+    "dev:api": "python -m uvicorn apps.api.main:app --reload --port 8000",
+    "build": "pnpm --filter openrobo-web run build",
+    "lint": "pnpm run lint:python && pnpm run lint:web",
+    "lint:python": "python -m ruff check .",
+    "lint:web": "pnpm --filter openrobo-web run lint",
+    "test": "pnpm run test:python && pnpm run test:web",
+    "test:python": "python -m pytest",
+    "test:web": "pnpm --filter openrobo-web run test",
     "test:e2e": "pnpm --filter openrobo-web run test:e2e",
-    "validate-schemas": "python3 scripts/validate_schemas.py"
+    "validate-schemas": "python scripts/validate_schemas.py",
+    "validate": "pnpm run validate-schemas",
+    "seed": "python scripts/seed_data.py",
+    "check": "pnpm run lint && pnpm run validate && pnpm run test && pnpm run build"
   },
   "devDependencies": {
     "prettier": "^3.2.5"

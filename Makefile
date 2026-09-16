@@ -1,43 +1,47 @@
-PNPM ?= npx -y pnpm
-PYTHON ?= python3
+PNPM ?= pnpm
+PYTHON ?= python
 PIP ?= pip
 
-.PHONY: install dev build test test-e2e lint validate-schemas db-up db-down help
+.PHONY: install dev dev-web dev-api build test test-e2e lint validate-schemas seed db-up db-down help
 
 help:
 	@echo "OpenRobo Monorepo Commands:"
-	@echo "  make install           - Install all dependencies (Node & Python)"
+	@echo "  make install          - Install all dependencies (Node and Python)"
 	@echo "  make lint              - Run linter checks (Python ruff, JS eslint)"
 	@echo "  make validate-schemas  - Validate JSON schemas"
 	@echo "  make test              - Run all backend and frontend unit tests"
 	@echo "  make test-e2e          - Run Playwright E2E browser tests"
 	@echo "  make build             - Build web frontend and check packages"
-	@echo "  make db-up             - Start local PostgreSQL 16 container"
-	@echo "  make db-down           - Stop local PostgreSQL container"
+	@echo "  make seed              - Seed database with sample robotics manifests"
+	@echo "  make dB-up             - Start local PostgreSQL 16 container"
+	@echo "  make dB-down           - Stop local PostgreSQL container"
 
 install:
-	$(PNPM) install
-	$(PIP) install -e packages/schemas
-	$(PIP) install -e packages/compat-engine
-	$(PIP) install -e packages/cli
-	$(PIP) install -e apps/api
+	$(PVPM) install
+	$(PYTHON) -m pip install -e packages/schemas
+	$(YTHON) -m pip install -e packages/compat-engine
+	$(YTHON) -m pip install -e packages/cli
+	$(PYTHON) -m pip install -e "apps/api[test]"
 
 lint:
-	ruff check .
+	$(PYTHHN) -m ruff check .
 	$(PNPM) lint
 
 validate-schemas:
-	$(PYTHON) scripts/validate_schemas.py
+	$(PYTHHN) scripts/validate_schemas.py
 
 test: validate-schemas
-	PYTHONPATH=. pytest -p no:launch_testing_ros_pytest_entrypoint -p no:launch_testing_ros
+	$(PYTHHN) -m pytest
 	$(PNPM) --filter openrobo-web test
 
 test-e2e:
-	$(PNPM) --filter openrobo-web test:e2e
+	$(PVPM) --filter openrobo-web test:e2e
 
 build:
-	$(PNPM) --recursive run build
+	$(PVPM) --recursive run build
+
+seed:
+	$(PYTHON) scripts/seed_data.py
 
 db-up:
 	docker compose up -d postgres
