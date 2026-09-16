@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 from pathlib import Path
 from typing import Optional
@@ -11,16 +11,8 @@ from rich.table import Table
 
 __version__ = "0.1.0"
 
-app = typer.Typer(
-    name="openrobo",
-    help="OpenRobo CLI — Open-Source Global Robotics Commons Tool",
-    add_completion=False
-)
-ingest_app = typer.Typer(
-    name="ingest",
-    help="Ingest open-source robotics repositories into OpenRobo manifests",
-    add_completion=False
-)
+app = typer.Typer(name="openrobo", help="OpenRobo CLI — Open-Source Global Robotics Commons Tool", add_completion=False)
+ingest_app = typer.Typer(name="ingest", help="Ingest open-source robotics repositories into OpenRobo manifests", add_completion=False)
 app.add_typer(ingest_app, name="ingest")
 
 console = Console()
@@ -35,13 +27,8 @@ def version_callback(value: bool):
 @app.callback()
 def common(
     version: Optional[bool] = typer.Option(
-        None,
-        "--version",
-        "-v",
-        help="Show OpenRobo CLI version and exit.",
-        callback=version_callback,
-        is_eager=True
-    )
+        None, "--version", "-v", help="Show OpenRobo CLI version and exit.", callback=version_callback, is_eager=True
+    ),
 ):
     """
     OpenRobo local-first CLI utility for discovery, manifest validation, and workspace generation.
@@ -49,10 +36,90 @@ def common(
     pass
 
 
+@app.command("search")
+def search(
+    query: Optional[str] = typer.Argument(None, help="Search terms (e.g. 'nav2', 'slam', 'realsense')"),
+    resource_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
+    domain: Optional[str] = typer.Option(None, "--domain", "-d", help="Filter by robotics domain"),
+    capability: Optional[str] = typer.Option(None, "--capability", "-c", help="Filter by capability"),
+    limit: int = typer.Option(20, "--limit", "-l", help="Maximum results to display"),
+    seed_file: Optional[Path] = typer.Option(None, "--seed-file", "-s", help="Path to seed resources JSON for offline search"),
+):
+    """
+    Search the OpenRobo registry using full-text and fuzzy relevance ranking.
+    """
+    from apps.api.models.resource import ResourceModel
+    from apps.api.services.search.ranking import calculate_relevance_score
+    from apps.api.services.search.search_service import SearchService
+
+    # Load resources from seed dataset if offline/local
+    seed_path = seed_file or Path("samples/seed_resources.json")
+    resources = []
+    if seed_path.exists():
+        try:
+            with open(seed_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for item in data:
+                res = ResourceModel(
+                    id=item["id"],
+                    name=item["name"],
+                    type=item.get("type", "software"),
+                    summary=item.get("summary"),
+                    description=item.get("description"),
+                    spdx_license_id=item.get("license", {}).get("spdx_id", "NOASSERTION"),
+                    repo_url=item.get("source", {}).get("repo_url"),
+                    robotics_domains=item.get("robotics_domains", []),
+                    capabilities=item.get("capabilities", []),
+                    platforms=item.get("platforms", {}),
+                    evidence_level=item.get("evidence", {}).get("level", "unknown"),
+                )
+                resources.append(res)
+        except Exception as e:
+            console.print(f"[yellow]Warning: Could not load local seed data: {e}[/yellow]")
+
+    # Filter and score
+    tokens = SearchService._tokenize(query) if query else []
+    scored = []
+    for r in resources:
+        if resource_type and r.type.lower() != resource_type.lower():
+            continue
+        if domain and not any(domain.lower() in d.lower() for d in (r.robotics_domains or [])):
+            continue
+        if capability and not any(capability.lower() in c.lower() for c in (r.capabilities or [])):
+            continue
+
+        if query:
+            score, highlight = calculate_relevance_score(r, tokens, query, enable_fuzzy=True)
+            if score > 0:
+                scored.append((r, score, highlight))
+        else:
+            scored.append((r, 1.0, None))
+
+    scored.sort(key=lambda x: (-x[1], x[0].name.lower()))
+    results = scored[:limit]
+
+    title = f"Search Results for '{query}'" if query else "OpenRobo Registry Resources"
+    table = Table(title=title, show_header=True, header_style="bold cyan")
+    table.add_column("Score", style="yellow", justify="right", width=7)
+    table.add_column("Resource ID", style="cyan", no_wrap=True)
+    table.add_column("Type", style="magenta")
+    table.add_column("Domains", style="green")
+    table.add_column("License", style="dim")
+    table.add_column("Summary", style="white")
+
+    for r, score, _ in results:
+        domains_str = ", ".join(r.robotics_domains or [])[:24]
+        summary_str = (r.summary or "")[:50] + ("..." if len(r.summary or "") > 50 else "")
+        table.add_row(f"{score:.2f}", r.id, r.type, domains_str, r.spdx_license_id, summary_str)
+
+    console.print(table)
+    console.print(f"\nFound [bold]{len(scored)}[/bold] matching robotics resources.")
+
+
 @app.command("validate")
 def validate(
     file_path: Path = typer.Argument(..., help="Path to JSON manifest file to validate."),
-    manifest_type: str = typer.Option("resource", "--type", "-t", help="Manifest type: 'resource' or 'stack'")
+    manifest_type: str = typer.Option("resource", "--type", "-t", help="Manifest type: 'resource' or 'stack'"),
 ):
     """
     Validate a local JSON resource or stack manifest against canonical OpenRobo schemas.
@@ -86,7 +153,7 @@ def validate(
 @ingest_app.command("github")
 def ingest_github(
     repository_url: str = typer.Argument(..., help="Public GitHub repository URL (e.g. https://github.com/ros-navigation/navigation2)"),
-    output_dir: Optional[Path] = typer.Option(None, "--output-dir", "-o", help="Optional directory to save generated manifest files.")
+    output_dir: Optional[Path] = typer.Option(None, "--output-dir", "-o", help="Optional directory to save generated manifest files."),
 ):
     """
     Inspect a public GitHub robotics repository and generate canonical OpenRobo resource manifests.
@@ -122,13 +189,7 @@ def ingest_github(
     for cand in candidates:
         valid, errors = validate_resource_manifest(cand)
         val_status = "[green]VALID[/green]" if valid else f"[red]INVALID ({len(errors)} errs)[/red]"
-        table.add_row(
-            cand["id"],
-            cand["type"],
-            cand["version"],
-            cand.get("license", {}).get("spdx_id", "NOASSERTION"),
-            val_status
-        )
+        table.add_row(cand["id"], cand["type"], cand["version"], cand.get("license", {}).get("spdx_id", "NOASSERTION"), val_status)
         if output_dir:
             output_dir.mkdir(parents=True, exist_ok=True)
             out_file = output_dir / f"{cand['id'].replace('/', '_')}.json"

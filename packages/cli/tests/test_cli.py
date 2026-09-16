@@ -1,4 +1,4 @@
-﻿from openrobo_cli.main import app
+from openrobo_cli.main import app
 from typer.testing import CliRunner
 
 runner = CliRunner()
@@ -32,3 +32,15 @@ def test_cli_ingest_github_help():
     result = runner.invoke(app, ["ingest", "github", "--help"])
     assert result.exit_code == 0
     assert "repository_url" in result.stdout.lower()
+
+
+def test_cli_search_help():
+    result = runner.invoke(app, ["search", "--help"])
+    assert result.exit_code == 0
+    assert "search" in result.stdout.lower()
+
+
+def test_cli_search_query():
+    result = runner.invoke(app, ["search", "slam"])
+    assert result.exit_code == 0
+    assert "SLAM" in result.stdout or "Resource ID" in result.stdout
