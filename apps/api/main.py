@@ -1,11 +1,11 @@
-from contextlib import asynccontextmanager
+﻿from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from apps.api.database import Base, engine
-from apps.api.routers import graph, health, resources
+from apps.api.routers import graph, health, ingestion, resources
 from apps.api.security import SecurityHeadersMiddleware
 
 
@@ -52,6 +52,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(resources.router, prefix="/api/v1")
 app.include_router(graph.router, prefix="/api/v1")
+app.include_router(ingestion.router, prefix="/api/v1")
 
 @app.get("/", include_in_schema=False)
 async def root():

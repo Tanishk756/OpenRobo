@@ -1,99 +1,88 @@
 ﻿'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Resource } from '../lib/api/types';
-import { getTypeBadgeClass } from './ResourceCard';
 
 interface ResourceDetailDrawerProps {
   resource: Resource | null;
   onClose: () => void;
 }
 
-export default function ResourceDetailDrawer({ resource, onClose }: ResourceDetailDrawerProps) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
+export function ResourceDetailDrawer({ resource, onClose }: ResourceDetailDrawerProps) {
   if (!resource) return null;
 
-  const osList = resource.platforms?.operating_systems || [];
   const rosList = resource.platforms?.ros_versions || [];
+  const osList = resource.platforms?.operating_systems || [];
   const archList = resource.platforms?.cpu_architectures || [];
   const repoUrl = resource.source?.repo_url || resource.repo_url;
+  const provenance = resource.metadata_json?.provenance;
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Resource Details"
+      data-testid="detail-drawer"
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 50,
-        background: 'rgba(0, 0, 0, 0.7)',
-        backdropFilter: 'blur(4px)',
         display: 'flex',
         justifyContent: 'flex-end',
+        background: 'rgba(0, 0, 0, 0.7)',
+        backdropFilter: 'blur(4px)',
       }}
       onClick={onClose}
-      data-testid="detail-drawer-overlay"
     >
       <div
         style={{
           width: '100%',
-          maxWidth: '680px',
-          height: '100%',
+          maxWidth: '620px',
           background: 'var(--panel-bg)',
           borderLeft: '1px solid var(--border-color)',
-          boxShadow: '-8px 0 24px rgba(0, 0, 0, 0.5)',
+          height: '100%',
           overflowY: 'auto',
           padding: '2rem',
           display: 'flex',
           flexDirection: 'column',
           gap: '1.5rem',
+          boxShadow: '-10px 0 30px rgba(0, 0, 0, 0.5)',
         }}
         onClick={(e) => e.stopPropagation()}
-        data-testid="detail-drawer"
       >
-        {/* Header Actions */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1.25rem' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--accent-cyan)' }}>
-                {resource.id}
-              </span>
-              <span className={`badge ${getTypeBadgeClass(resource.type)}`}>
-                {resource.type.replace('_', ' ')}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
+              <span className="badge badge-type">{resource.type}</span>
+              {resource.version && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                  v{resource.version}
+                </span>
+              )}
             </div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-              {resource.name}
-            </h2>
-            {resource.version && (
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                Version: <strong>{resource.version}</strong>
-              </span>
-            )}
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)' }}>{resource.name}</h2>
+            <code style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{resource.id}</code>
           </div>
-
           <button
             onClick={onClose}
-            style={{
-              background: 'rgba(30, 41, 59, 0.6)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-main)',
-              borderRadius: '6px',
-              padding: '0.4rem 0.75rem',
-              fontSize: '0.9rem',
-            }}
+            aria-label="Close drawer"
             data-testid="close-drawer"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border-color)',
+              color: 'var(--text-dim)',
+              cursor: 'pointer',
+              padding: '0.4rem 0.7rem',
+              borderRadius: '4px',
+              fontSize: '1rem',
+            }}
           >
-            ✕ Close
+            ✕
           </button>
         </div>
 
-        {/* Summary & Description */}
+        {/* Overview */}
         <section>
           <h3 style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
             Overview
@@ -125,6 +114,35 @@ export default function ResourceDetailDrawer({ resource, onClose }: ResourceDeta
               </svg>
               <span>{repoUrl}</span>
             </a>
+          </section>
+        )}
+
+        {/* Provenance & Lineage */}
+        {provenance && (
+          <section data-testid="provenance-section" style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1rem' }}>
+            <h3 style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+              Data Provenance & Ingestion Lineage
+            </h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.6rem', fontSize: '0.85rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', display: 'block' }}>Provider</span>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>{provenance.source_provider || 'GitHub'}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', display: 'block' }}>Revision</span>
+                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>{(provenance.upstream_revision || 'HEAD').slice(0, 10)}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', display: 'block' }}>Classification</span>
+                <span style={{ fontFamily: 'var(--font-mono)', color: '#67e8f9' }}>{provenance.provenance_classification || 'UPSTREAM_DATA'}</span>
+              </div>
+              {provenance.source_manifest_path && (
+                <div>
+                  <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem', display: 'block' }}>Manifest</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>{provenance.source_manifest_path}</span>
+                </div>
+              )}
+            </div>
           </section>
         )}
 
@@ -217,7 +235,7 @@ export default function ResourceDetailDrawer({ resource, onClose }: ResourceDeta
           </div>
           <div>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Evidence Level: </span>
-            <span className="badge badge-evidence">● {resource.evidence_level?.replace('_', ' ')}</span>
+            <span className="badge badge-evidence">🔒 {resource.evidence_level?.replace('_', ' ')}</span>
           </div>
         </section>
 
@@ -234,3 +252,5 @@ export default function ResourceDetailDrawer({ resource, onClose }: ResourceDeta
     </div>
   );
 }
+
+export default ResourceDetailDrawer;

@@ -19,6 +19,14 @@ const MOCK_RESOURCES: Resource[] = [
       ros_versions: ['Jazzy', 'Humble'],
     },
     evidence_level: 'ci_verified',
+    metadata_json: {
+      provenance: {
+        source_provider: 'GitHub',
+        upstream_revision: 'c0ffeebabe12',
+        provenance_classification: 'UPSTREAM_DATA',
+        source_manifest_path: 'package.xml',
+      },
+    },
   },
   {
     id: 'robotis/turtlebot3',
@@ -90,7 +98,7 @@ describe('ResourcesPage (Resource Explorer)', () => {
     });
   });
 
-  it('opens detail drawer when a resource card is clicked and closes it', async () => {
+  it('opens detail drawer when a resource card is clicked and displays provenance', async () => {
     vi.spyOn(apiClient, 'fetchResources').mockResolvedValueOnce({
       items: MOCK_RESOURCES,
       total: 2,
@@ -107,11 +115,14 @@ describe('ResourcesPage (Resource Explorer)', () => {
     // Click card
     fireEvent.click(screen.getByTestId('resource-card-ros-controls/ros2_control'));
 
-    // Verify detail drawer opened
+    // Verify detail drawer opened with provenance
     await waitFor(() => {
       expect(screen.getByTestId('detail-drawer')).toBeInTheDocument();
       expect(screen.getByText(/Platform Matrix/i)).toBeInTheDocument();
       expect(screen.getByText(/Robotics Capabilities/i)).toBeInTheDocument();
+      expect(screen.getByTestId('provenance-section')).toBeInTheDocument();
+      expect(screen.getByText(/Data Provenance & Ingestion Lineage/i)).toBeInTheDocument();
+      expect(screen.getByText('c0ffeebabe')).toBeInTheDocument();
     });
 
     // Click close button

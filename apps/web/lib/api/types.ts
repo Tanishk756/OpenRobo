@@ -21,6 +21,24 @@ export interface EvidenceDetail {
   notes?: string;
 }
 
+export interface ProvenanceDetail {
+  source_provider?: string;
+  source_url?: string;
+  source_identifier?: string;
+  upstream_revision?: string;
+  ingestion_timestamp?: string;
+  provenance_classification?: string;
+  source_manifest_path?: string;
+  inspected_files?: string[];
+  maintainers?: string[];
+}
+
+export interface ResourceMetadata {
+  provenance?: ProvenanceDetail;
+  dependencies?: Record<string, string[]>;
+  sub_packages?: string[];
+}
+
 export interface Resource {
   id: string;
   name: string;
@@ -37,6 +55,7 @@ export interface Resource {
   source?: SourceDetail;
   license?: LicenseDetail;
   evidence?: EvidenceDetail;
+  metadata_json?: ResourceMetadata;
   created_at?: string;
   updated_at?: string;
 }
