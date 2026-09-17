@@ -56,9 +56,10 @@ OpenRobo/
 │   ├── graph.schema.json         # Compatibility & dependency edge schema
 │   └── stack.schema.json         # Complete robot stack assembly schema
 ├── packages/
-│   ├── schemas-py/               # Python schema validation library (openrobo-schemas)
+│   ├── schemas/                  # Python schema validation library (openrobo-schemas)
 │   ├── compat-engine/            # Compatibility reasoning & graph engine (openrobo-compat)
 │   ├── workspace-gen/            # Hardened ROS 2 workspace generator (openrobo-workspace)
+│   ├── runtime-core/             # Runtime execution & build verification engine (openrobo-runtime)
 │   └── cli/                      # Typer/Rich unified CLI application (openrobo)
 ├── apps/
 │   ├── api/                      # FastAPI async REST API service
@@ -73,8 +74,8 @@ OpenRobo/
 
 ### Prerequisites
 
-- **Node.js**: `v18.17.0+` or `v20.x`
-- **pnpm**: `v8.0.0+` (`corepack enable pnpm`)
+- **Node.js**: `v20.x` or `v24.x` (CI uses Node 24)
+- **pnpm**: `v12.4.2+` (`corepack enable pnpm`)
 - **Python**: `3.10`, `3.11`, or `3.12`
 - **PostgreSQL**: `14+` (with `pg_trgm` extension) or in-memory SQLite for testing
 
@@ -90,7 +91,7 @@ pnpm install
 # Setup Python Virtual Environment & CLI
 python -m venv .venv
 source .venv/bin/activate    # On Windows: .venv\Scripts\Activate.ps1
-pip install -e "packages/schemas-py" -e "packages/compat-engine" -e "packages/workspace-gen" -e "packages/cli" -e "apps/api"
+pip install -e "packages/schemas" -e "packages/compat-engine" -e "packages/workspace-gen" -e "packages/cli" -e "apps/api"
 ```
 
 ### 2. Verify Repository Baseline
