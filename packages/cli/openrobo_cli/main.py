@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import json
 from pathlib import Path
 from typing import Optional
@@ -9,11 +9,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-__version__ = "0.1.0"
+from openrobo_cli.workspace import workspace_app
+
+__version__ = "0.5.0"
 
 app = typer.Typer(name="openrobo", help="OpenRobo CLI — Open-Source Global Robotics Commons Tool", add_completion=False)
 ingest_app = typer.Typer(name="ingest", help="Ingest open-source robotics repositories into OpenRobo manifests", add_completion=False)
 app.add_typer(ingest_app, name="ingest")
+app.add_typer(workspace_app, name="workspace")
 
 console = Console()
 
