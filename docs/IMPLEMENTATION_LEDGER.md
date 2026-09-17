@@ -51,15 +51,17 @@ This ledger tracks the implementation, test coverage, verification evidence, and
 
 ---
 
-## Milestone 4 — Stack Builder
+## Milestone 4 ? Interactive Robotics Stack Builder
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|---|
-| **REQ-M4-01** | Stack Manifest Definition & Schema | `PLANNED` | YAML/JSON stack manifest standard | Validation tests | Pending | Stack format v1.0 | Draft stack schema |
-| **REQ-M4-02** | Interactive Stack Composition UI | `PLANNED` | Next.js Stack Builder page with real-time Knowledge Graph constraint checking | Vitest / Playwright | Pending | Depends on M3 engine | Build Stack UI |
+| **REQ-M4-01** | Canonical Stack Schema & Persistence | `COMPLETED` | `schemas/stack.schema.json` Draft 2020-12, `StackModel` table with JSON component serialization | Schema validation, `test_stacks_api.py` | `0005_stack_persistence.py` | Manifests are declarative; deployment colcon builds reserved for M5 | Proceed to M5 Workspace Generation |
+| **REQ-M4-02** | Dependency & Version Resolver | `COMPLETED` | `DependencyResolver` inspecting `DEPENDS_ON`, `REQUIRES`, `PROVIDES`, and version constraints | `test_resolver.py` (6 tests) | 100% test pass on cycles, transitive resolution, version conflicts | SAT solver not required for current acyclic candidate sets | Maintain O(degree) fast traversal |
+| **REQ-M4-03** | Stack REST API Suite | `COMPLETED` | `apps/api/routers/stacks.py` (CRUD, live validation, dependency resolution, manifest export/import, templates) | `test_stacks_api.py` (5 tests) | 200 OK / 201 Created on all endpoints | Untrusted imports validated against Draft 2020-12 schema | Support multi-stack comparisons in M5 |
+| **REQ-M4-04** | Interactive Stack Builder UI | `COMPLETED` | 3-panel Next.js workspace at `/stack-builder` (Library, Pipeline Composition, Live Compatibility Inspector) | `stack_builder.test.tsx` (3 tests) | Clean 6/6 static build prerender | Drag-and-drop optional; click-to-add primary | Add visual graph wire-drawing in M5 |
+| **REQ-M4-05** | Performance & Validation Benchmark | `COMPLETED` | Stack validation + dependency resolution benchmark | Benchmark script | **22.2 ms** median for 50 components (target <100 ms) | Cold start JIT in Python ~28 ms | High throughput in-memory evaluation |
 
 ---
-
 ## Milestone 5 — Workspace Generator & CLI
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |

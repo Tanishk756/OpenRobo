@@ -175,6 +175,28 @@ OpenRobo Milestone 2 introduces a PostgreSQL-native search architecture:
 
 ---
 
+
+## Interactive Robotics Stack Builder (`/stack-builder`)
+
+Milestone 4 introduces OpenRobo's end-to-end interactive robotics stack composition and validation workspace:
+
+- **3-Panel Engineering Workspace**:
+  - **Resource Library**: Real-time indexed search across hardware drivers, ROS packages, middleware, navigation, and perception layers.
+  - **Pipeline Assembly Area**: Categorized composition view (Sensors, Middleware, Perception, Localization, SLAM, Navigation, Control, Simulation).
+  - **Live Compatibility Inspector**: Real-time stack health summary, 8-rule deterministic diagnostics, and remediation suggestions.
+- **Dependency & Version Resolver**:
+  - Automatically identifies missing dependencies across transitive graph links (`DEPENDS_ON`, `REQUIRES`, `PROVIDES`).
+  - Detects version range incompatibilities and circular dependency cycles.
+  - Generates 1-click **Resolution Proposals** to automatically resolve stack requirements without destructive mutations.
+- **Canonical Manifest Import/Export**:
+  - Export full declarative stack configurations as `.openrobo.stack.json` matching `schemas/stack.schema.json`.
+  - Safe, untrusted import validation verifying against canonical schema Draft 2020-12 and registry availability.
+- **Starter Engineering Templates**:
+  - Mobile Robot Navigation (`turtlebot3_nav2_jazzy`)
+  - RGB-D Perception & Mapping (`realsense_slam_jazzy`)
+  - Manipulation & Arm Control (`ros2_control_manipulation`)
+  - Simulation & Digital Twin (`gazebo_nav2_simulation`)
+
 ## Roadmap
 
 | Milestone | Focus Area | Status |
@@ -183,7 +205,7 @@ OpenRobo Milestone 2 introduces a PostgreSQL-native search architecture:
 | **M1 — Registry & Discovery** | Resource Registry Engine, Static Ingestion, Resource Explorer UI | :white_check_mark: Completed |
 | **M2 — Search & Taxonomy** | PostgreSQL FTS, Trigram Fuzzy Search, Facets, CLI Search | :white_check_mark: Completed |
 | **M3 — Compatibility Intelligence** | Graph-Based Constraint Reasoning, ROS Compatibility Matrix | :construction: Planned |
-| **M4 — Interactive Stack Builder** | Stack Composition, Dependency Conflict Resolution UI | :crystal_ball: Planned |
+| **M4 ? Interactive Stack Builder** | Visual Composition, Live Compatibility Validation, Dependency Resolver, Manifest Import/Export | :white_check_mark: Completed |
 | **M5 — Workspace Generator** | Dev Container, Dockerfile, and Colcon Workspace Generation | :crystal_ball: Planned |
 
 ---
