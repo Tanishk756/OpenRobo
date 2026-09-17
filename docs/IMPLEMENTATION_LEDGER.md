@@ -21,6 +21,7 @@
 | **M6** | Runtime Architecture, Execution Providers & Adapters | `IMPLEMENTED & TESTED` | 131/131 Pytest, 16/16 Vitest | `docs/M6_VERIFICATION_REPORT.md` |
 | **M6.1** | Live Runtime Wiring, Truthful Readiness & Studio | `LIVE WIRING VERIFIED` | 131/131 Pytest, 16/16 Vitest | `docs/M6_LIVE_RUNTIME_REPORT.md` |
 | **M6.2** | Live Runtime Proof, End-to-End Acceptance & Colcon | `LIVE ACCEPTANCE VERIFIED` | 131/131 Pytest, 16/16 Vitest, 10/10 Live Phases | `docs/M6_LIVE_ACCEPTANCE_REPORT.md` |
+| **M7.1.2** | Real mTLS Server Acceptance & Delivery Contract Closure | `REAL mTLS VERIFIED` | 164/164 Pytest, 19/19 Vitest, 8 Real mTLS Tests | `docs/M7_1_2_REAL_MTLS_ACCEPTANCE_REPORT.md` |
 | **M7.1** | Secure Remote Agent, Device Identity & Fleet Foundation | `LOCALLY ACCEPTANCE VERIFIED & LOAD SIMULATED` | 149/149 Pytest, 19/19 Vitest, 3-Agent Acceptance, 100-Agent Sim | `docs/M7_1_VERIFICATION_REPORT.md` |
 
 ---
@@ -82,3 +83,12 @@
 | **REQ-M7-13** | Enrollment Expiry Race & Binding | `VERIFIED` | Atomic update enforces `expires_at > :now` and checks token device binding | `test_fleet_api.py` | `apps/api/routers/fleet.py` | None | Hardened enrollment |
 | **REQ-M7-14** | Authenticated WebSocket Sessions | `VERIFIED` | Pre-authenticates client certificate, validates `MessageEnvelope`, enforces allowlist, and drops on revocation | `test_fleet_api.py` | `apps/api/routers/fleet.py` | In-memory connection registry | Distributed registry in M8 |
 | **REQ-M7-15** | Admin API Endpoint Authorization | `VERIFIED` | Protected control-plane endpoints with `X-OpenRobo-Admin-Key` / Bearer token | `test_fleet_api.py` | `apps/api/services/fleet_security.py`, `apps/api/routers/fleet.py` | In-memory admin key check | RBAC in M8 |
+
+## Milestone 7.1.2 - Real mTLS Server Acceptance, WebSocket Identity Proof & Delivery Contract Closure
+| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Target Release |
+|---|---|---|---|---|---|---|---|
+| **REQ-M7-16** | Real Network Socket mTLS Handshake Acceptance | `VERIFIED` | Live `ThreadingHTTPServer` with `ssl.CERT_REQUIRED`, testing handshake success, no-cert socket rejection, and wrong-CA rejection | `test_real_mtls_transport.py` | `tests/integration/test_real_mtls_transport.py` | None | Socket mTLS verified |
+| **REQ-M7-17** | 3-Agent Real Socket mTLS Lifecycle | `VERIFIED` | 3 distinct agents (`robot-alpha`, `robot-beta`, `robot-gamma`) connecting over live mTLS sockets with Ed25519 certs | `test_real_mtls_transport.py` | `tests/integration/test_real_mtls_transport.py` | None | Multi-agent real mTLS verified |
+| **REQ-M7-18** | 25-Agent Real mTLS Concurrency Acceptance | `VERIFIED` | 25 concurrent mTLS client connections performing mutual TLS handshakes and heartbeats | `test_real_mtls_transport.py` | `tests/integration/test_real_mtls_transport.py` | None | Concurrency verified |
+| **REQ-M7-19** | WebSocket Identity Proof Closure | `VERIFIED` | Removed unauthenticated fallback/fingerprint frames; enforces verified transport certificate identity prior to socket acceptance | `test_real_mtls_transport.py`, `test_fleet_api.py` | `apps/api/routers/fleet.py` | None | No fingerprint spoofing |
+| **REQ-M7-20** | Typed Spool Routing & Delivery Contracts | `VERIFIED` | Aligned `TelemetryBatchRequest` schema; typed routing sends heartbeats to `/agent/heartbeat` and telemetry to `/agent/telemetry-batch` | `test_real_mtls_transport.py`, `test_spool.py` | `openrobo_agent/service.py`, `apps/api/routers/fleet.py` | None | Typed delivery contract verified |
