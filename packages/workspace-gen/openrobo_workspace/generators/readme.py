@@ -1,13 +1,17 @@
-"""Workspace README generator."""
+﻿"""Workspace README generator."""
 
 from openrobo_workspace.models import GeneratedFile, WorkspaceGenerationPlan
 
 
 def generate_workspace_readme(plan: WorkspaceGenerationPlan) -> GeneratedFile:
+    m_name = plan.maintainer.name if plan.maintainer else "OpenRobo User"
+    m_email = f" <{plan.maintainer.email}>" if (plan.maintainer and plan.maintainer.email) else " *(Email not specified)*"
+    maintainer_display = f"{m_name}{m_email}"
+
     lines = [
         f"# {plan.stack_name} — Generated ROS 2 Workspace",
         "",
-        "This robotics workspace was deterministically synthesized by the **OpenRobo Workspace Generator** (Milestone 5).",
+        "This robotics workspace was deterministically synthesized by the **OpenRobo Workspace Generator** (Milestone 5.1 Hardened).",
         "",
         "## Stack Overview",
         "",
@@ -16,18 +20,48 @@ def generate_workspace_readme(plan: WorkspaceGenerationPlan) -> GeneratedFile:
         f"- **Target ROS Distro:** `{plan.target_distro}`",
         f"- **Target OS:** `{plan.target_os}` (`{plan.target_arch}`)",
         f"- **Compatibility Verdict:** `{plan.compatibility_verdict}`",
+        f"- **Maintainer:** {maintainer_display}",
         "",
-        "## Components & Resolution",
+        "## Workspace Readiness & Verification Status",
         "",
-        "| Resource ID | Name | Version | Build Type | Strategy |",
-        "|---|---|---|---|---|",
+        "| Verification Stage | Status | Notes |",
+        "|---|---|---|",
+        f"| **Static Analysis** | `{plan.readiness_report.static_validation.value.upper()}` | Syntax, XML, and YAML verified |",
+        f"| **Docker Build** | `{plan.readiness_report.docker_build.value.upper()}` | Container build not executed in generator |",
+        f"| **Colcon Build** | `{plan.readiness_report.colcon_build.value.upper()}` | Compilation not executed in generator |",
+        f"| **Runtime Validation** | `{plan.readiness_report.runtime_validation.value.upper()}` | Live node execution not performed |",
+        f"| **Overall Readiness** | **`{plan.readiness_report.overall_state.value}`** | |",
+        "",
+        "## Components & Generation Evidence",
+        "",
+        "Every generated component artifact is backed by an explicit evidence level (no guessed or invented configuration):",
+        "",
+        "| Resource ID | Name | Version | Strategy | Evidence Level | Adapter |",
+        "|---|---|---|---|---|---|",
     ]
 
     for comp in sorted(plan.components, key=lambda c: c.resource_id):
-        btype = comp.build_type.value if comp.build_type else "unknown"
+        ev_level = comp.evidence.level.value if comp.evidence else "UNKNOWN"
+        if comp.evidence and comp.evidence.adapter_id:
+            adapter_str = f"{comp.adapter_name} (v{comp.evidence.adapter_version})"
+        else:
+            adapter_str = "None (Scaffold)"
         lines.append(
-            f"| `{comp.resource_id}` | {comp.name} | `{comp.resolved_version}` | `{btype}` | `{comp.source_strategy.value}` |"
+            f"| `{comp.resource_id}` | {comp.name} | `{comp.resolved_version}` | "
+            f"`{comp.source_strategy.value}` | `{ev_level}` | {adapter_str} |"
         )
+
+    if plan.readiness_report.manual_steps_required:
+        lines.extend([
+            "",
+            "## Required Manual Configuration Steps",
+            "",
+            "> [!IMPORTANT]",
+            "> The following configuration steps must be performed before building or running this workspace:",
+            "",
+        ])
+        for step in plan.readiness_report.manual_steps_required:
+            lines.append(f"- [ ] {step}")
 
     lines.extend([
         "",
@@ -36,7 +70,7 @@ def generate_workspace_readme(plan: WorkspaceGenerationPlan) -> GeneratedFile:
         "```",
         f"{plan.workspace_name}/",
         "├── openrobo.manifest.json       # Canonical Stack Manifest",
-        "├── openrobo.lock.json           # Reproducible Lockfile & Digests",
+        "├── openrobo.lock.json           # Reproducible Lockfile & Evidence Hashes",
         "├── README.md                    # This documentation",
         "├── setup/",
         "│   ├── install_dependencies.sh  # APT & pip provisioning script",
@@ -80,7 +114,7 @@ def generate_workspace_readme(plan: WorkspaceGenerationPlan) -> GeneratedFile:
         "",
         "### 2. Docker & Containerized Environment",
         "",
-        "To build and run inside an isolated container with all dependencies pre-configured:",
+        "To build and run inside an isolated container with least-privilege security settings:",
         "",
         "```bash",
         "cd docker",
@@ -102,17 +136,6 @@ def generate_workspace_readme(plan: WorkspaceGenerationPlan) -> GeneratedFile:
         ])
         for w in plan.warnings:
             lines.append(f"- ⚠️ {w}")
-        lines.append("")
-
-    if plan.unsupported_components:
-        lines.extend([
-            "## Generic / Manual Configuration Required",
-            "",
-            "The following components did not have specialized bringup adapters and have been scaffolded with placeholder configurations:",
-            "",
-        ])
-        for u in plan.unsupported_components:
-            lines.append(f"- `{u}`: See `src/{plan.bringup_package_name}/config/{u}.yaml.example` for manual parameter setup.")
         lines.append("")
 
     lines.extend([

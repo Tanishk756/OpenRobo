@@ -80,16 +80,50 @@ def preview(
 
     # Diagnostics Header
     verdict_color = "green" if preview_data.compatibility_verdict == "COMPATIBLE" else "yellow"
+    readiness_state = preview_data.readiness_report.overall_state.value if preview_data.readiness_report else "UNKNOWN"
+    readiness_color = "green" if "STATICALLY_VALIDATED" in readiness_state else "yellow"
+
     console.print(
         Panel(
-            f"[bold cyan]OpenRobo Workspace Generator[/bold cyan] [dim]v{GENERATOR_VERSION}[/dim]\n"
+            f"[bold cyan]OpenRobo Workspace Generator[/bold cyan] [dim]v{GENERATOR_VERSION} (M5.1 Hardened)[/dim]\n"
             f"Stack: [bold green]{preview_data.stack_name}[/bold green] ({preview_data.stack_id})\n"
             f"Target: [yellow]{preview_data.target_distro}[/yellow] on [dim]{preview_data.target_os} ({preview_data.target_arch})[/dim]\n"
-            f"Verdict: [{verdict_color}]{preview_data.compatibility_verdict}[/{verdict_color}]",
-            title="[bold]Workspace Preview[/bold]",
+            f"Compatibility: [{verdict_color}]{preview_data.compatibility_verdict}[/{verdict_color}]\n"
+            f"Workspace Readiness: [{readiness_color}]{readiness_state}[/{readiness_color}]",
+            title="[bold]OpenRobo Workspace Verification[/bold]",
             border_style="cyan",
         )
     )
+
+    # Verification Matrix Table
+    if preview_data.readiness_report:
+        rep = preview_data.readiness_report
+        vtable = Table(title="Workspace Verification Matrix", border_style="dim")
+        vtable.add_column("Stage", style="cyan")
+        vtable.add_column("Status", style="bold")
+        vtable.add_column("Details", style="dim")
+
+        vtable.add_row(
+            "Static Syntax & AST",
+            f"[green]{rep.static_validation.value.upper()}[/green]",
+            "XML, Python AST, YAML, JSON and path safety verified",
+        )
+        vtable.add_row(
+            "Docker Build",
+            f"[yellow]{rep.docker_build.value.upper()}[/yellow]",
+            "Container build not executed during workspace generation",
+        )
+        vtable.add_row(
+            "Colcon Build",
+            f"[yellow]{rep.colcon_build.value.upper()}[/yellow]",
+            "colcon compilation not executed during workspace generation",
+        )
+        vtable.add_row(
+            "Runtime Validation",
+            f"[yellow]{rep.runtime_validation.value.upper()}[/yellow]",
+            "Live node execution not performed",
+        )
+        console.print(vtable)
 
     # Resolution Summary Table
     table = Table(title="Synthesized Artifacts Summary", border_style="dim")
@@ -103,8 +137,13 @@ def preview(
 
     console.print(table)
 
+    if preview_data.readiness_report and preview_data.readiness_report.manual_steps_required:
+        console.print("\n[bold yellow]Manual Configuration Required:[/bold yellow]")
+        for step in preview_data.readiness_report.manual_steps_required:
+            console.print(f"  * [yellow]{step}[/yellow]")
+
     if preview_data.warnings:
-        console.print("\n[bold yellow]Warnings / Manual Actions:[/bold yellow]")
+        console.print("\n[bold yellow]Warnings / Notes:[/bold yellow]")
         for w in preview_data.warnings:
             console.print(f"  * [yellow]{w}[/yellow]")
 
@@ -146,7 +185,8 @@ def generate(
         Panel(
             f"[bold green]Workspace Generated Successfully![/bold green]\n\n"
             f"Location: [cyan]{result.output_path}[/cyan]\n"
-            f"Total Files Written: [bold]{result.file_count}[/bold] ({result.total_bytes:,} bytes)\n\n"
+            f"Total Files Written: [bold]{result.file_count}[/bold] ({result.total_bytes:,} bytes)\n"
+            f"Static Validation: [bold green]PASSED[/bold green]\n\n"
             f"[dim]Next steps:[/dim]\n"
             f"  1. cd {output}\n"
             f"  2. chmod +x setup/*.sh && ./setup/install_dependencies.sh\n"

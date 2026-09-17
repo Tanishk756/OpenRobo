@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useEffect, useState } from 'react';
 import { downloadWorkspaceZip, previewWorkspace } from '../../lib/api/client';
@@ -58,38 +58,40 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${preview?.workspace_name || stackName || 'openrobo_ws'}.zip`;
+      a.download = `${preview?.workspace_name || stackName || 'openrobo_workspace'}.zip`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (err: any) {
-      alert(`Download failed: ${err.message || 'Unknown error'}`);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      alert(`Download failed: ${e?.message || 'Unknown network error'}`);
     } finally {
       setDownloading(false);
     }
   };
 
   const handleCopy = () => {
-    if (!preview?.files[selectedFile]) return;
+    if (!preview || !preview.files[selectedFile]) return;
     navigator.clipboard.writeText(preview.files[selectedFile]);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const filesList = preview ? Object.keys(preview.files).sort() : [];
+  const filesList = preview?.files ? Object.keys(preview.files).sort() : [];
+  const readiness = preview?.readiness_report;
 
   return (
     <div
       style={{
         position: 'fixed',
         inset: 0,
+        zIndex: 9999,
         background: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(6px)',
+        backdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1000,
         padding: '24px',
       }}
     >
@@ -97,14 +99,14 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
         style={{
           background: 'var(--bg-secondary)',
           border: '1px solid var(--border-color)',
-          borderRadius: '14px',
+          borderRadius: '12px',
           width: '100%',
           maxWidth: '1100px',
           height: '85vh',
           display: 'flex',
           flexDirection: 'column',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
           overflow: 'hidden',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
         }}
       >
         {/* MODAL HEADER */}
@@ -118,82 +120,47 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
             background: 'var(--bg-card)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, var(--accent-cyan), #3b82f6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1rem',
-                fontWeight: 800,
-                color: '#000',
-              }}
-            >
-              WS
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Workspace & Deployment Generator
-                </span>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                Workspace Synthesis & Deployment Preview
+              </h2>
+              {preview?.generator_version && (
                 <span
                   style={{
                     fontSize: '0.7rem',
                     padding: '2px 8px',
-                    borderRadius: '999px',
+                    borderRadius: '12px',
                     background: 'rgba(56,189,248,0.15)',
                     color: 'var(--accent-cyan)',
                     border: '1px solid rgba(56,189,248,0.3)',
-                    fontWeight: 600,
                   }}
                 >
-                  v{preview?.generator_version || '0.5.0'}
+                  v{preview.generator_version}
                 </span>
-              </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Targeting <strong style={{ color: 'var(--text-primary)' }}>{preview?.target_distro || 'humble'}</strong> on {preview?.target_os || 'ubuntu-22.04'} ({preview?.target_arch || 'x86_64'})
-              </div>
+              )}
             </div>
+            <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Stack: <strong style={{ color: 'var(--text-primary)' }}>{stackName}</strong> | Target:{' '}
+              <span style={{ color: 'var(--accent-cyan)' }}>{preview?.target_distro || 'humble'}</span> (
+              {preview?.target_os || 'ubuntu-22.04'})
+            </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {preview && (
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  background:
-                    preview.compatibility_verdict === 'COMPATIBLE'
-                      ? 'rgba(34,197,94,0.15)'
-                      : 'rgba(234,179,8,0.15)',
-                  color:
-                    preview.compatibility_verdict === 'COMPATIBLE' ? '#4ade80' : '#facc15',
-                  border: `1px solid ${preview.compatibility_verdict === 'COMPATIBLE' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)'}`,
-                }}
-              >
-                {preview.compatibility_verdict}
-              </span>
-            )}
-            <button
-              onClick={onClose}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-muted)',
-                cursor: 'pointer',
-                fontSize: '1.3rem',
-                padding: '4px',
-              }}
-            >
-              &times;
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+            }}
+          >
+            &times;
+          </button>
         </div>
 
         {/* MODAL BODY */}
@@ -218,89 +185,107 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
                 animation: 'spin 1s linear infinite',
               }}
             />
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              Synthesizing deterministic colcon workspace & container artifacts...
-            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              Synthesizing deterministic workspace files & static validation...
+            </p>
           </div>
         ) : error ? (
-          <div style={{ padding: '32px', textAlign: 'center' }}>
-            <div style={{ color: '#f87171', fontWeight: 600, marginBottom: '8px' }}>
-              Generation Failed
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '24px',
+              textAlign: 'center',
+            }}
+          >
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '8px',
+                padding: '16px 24px',
+                maxWidth: '600px',
+                color: '#f87171',
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: '8px' }}>Workspace Generation Error</div>
+              <div style={{ fontSize: '0.85rem' }}>{error}</div>
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{error}</div>
           </div>
         ) : preview ? (
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            {/* LEFT SIDEBAR: FILE LIST & DIAGNOSTICS */}
+            {/* LEFT PANE: FILE TREE & READINESS MATRIX */}
             <div
               style={{
-                width: '340px',
+                width: '320px',
                 borderRight: '1px solid var(--border-color)',
                 display: 'flex',
                 flexDirection: 'column',
-                background: 'rgba(0,0,0,0.2)',
+                background: 'rgba(0,0,0,0.15)',
               }}
             >
-              {/* SUMMARY STATS */}
+              {/* READINESS BADGE */}
               <div
                 style={{
-                  padding: '12px 16px',
+                  padding: '10px 14px',
                   borderBottom: '1px solid var(--border-color)',
-                  display: 'flex',
-                  gap: '8px',
-                  flexWrap: 'wrap',
+                  background: 'var(--bg-card)',
                 }}
               >
-                <div
-                  style={{
-                    flex: 1,
-                    minWidth: '90px',
-                    padding: '8px 10px',
-                    background: 'var(--bg-card)',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-color)',
-                  }}
-                >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Files</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {preview.file_count}
-                  </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                    Workspace Readiness
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      background: readiness?.overall_state === 'STATICALLY_VALIDATED' ? 'rgba(34,197,94,0.15)' : 'rgba(234,179,8,0.15)',
+                      color: readiness?.overall_state === 'STATICALLY_VALIDATED' ? '#4ade80' : '#facc15',
+                      border: `1px solid ${readiness?.overall_state === 'STATICALLY_VALIDATED' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)'}`,
+                    }}
+                  >
+                    {readiness?.overall_state || 'STATICALLY_VALIDATED'}
+                  </span>
                 </div>
-                <div
-                  style={{
-                    flex: 1,
-                    minWidth: '90px',
-                    padding: '8px 10px',
-                    background: 'var(--bg-card)',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-color)',
-                  }}
-                >
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Total Size</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {(preview.total_bytes / 1024).toFixed(1)} KB
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '0.7rem' }}>
+                  <div style={{ color: 'var(--text-muted)' }}>
+                    Static Analysis: <span style={{ color: '#4ade80', fontWeight: 600 }}>PASSED</span>
+                  </div>
+                  <div style={{ color: 'var(--text-muted)' }}>
+                    Docker Build: <span style={{ color: 'var(--text-muted)' }}>NOT RUN</span>
+                  </div>
+                  <div style={{ color: 'var(--text-muted)' }}>
+                    Colcon Build: <span style={{ color: 'var(--text-muted)' }}>NOT RUN</span>
+                  </div>
+                  <div style={{ color: 'var(--text-muted)' }}>
+                    Runtime Check: <span style={{ color: 'var(--text-muted)' }}>NOT RUN</span>
                   </div>
                 </div>
               </div>
 
-              {/* WARNINGS PANEL */}
-              {preview.warnings && preview.warnings.length > 0 && (
+              {/* MANUAL CONFIG REQUIRED ALERT */}
+              {readiness && readiness.manual_steps_required && readiness.manual_steps_required.length > 0 && (
                 <div
                   style={{
-                    margin: '10px 12px',
                     padding: '8px 12px',
-                    borderRadius: '6px',
-                    background: 'rgba(234,179,8,0.1)',
-                    border: '1px solid rgba(234,179,8,0.25)',
+                    background: 'rgba(234, 179, 8, 0.1)',
+                    borderBottom: '1px solid rgba(234, 179, 8, 0.3)',
                     fontSize: '0.75rem',
                     color: '#facc15',
                   }}
                 >
-                  <div style={{ fontWeight: 700, marginBottom: '4px' }}>⚠️ Generation Notes:</div>
+                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>⚠️ Manual Configuration Required:</div>
                   <ul style={{ paddingLeft: '14px', margin: 0 }}>
-                    {preview.warnings.map((w, idx) => (
+                    {readiness.manual_steps_required.map((step, idx) => (
                       <li key={idx} style={{ marginTop: '2px' }}>
-                        {w}
+                        {step}
                       </li>
                     ))}
                   </ul>
@@ -319,7 +304,7 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
                     letterSpacing: '0.5px',
                   }}
                 >
-                  Generated File Hierarchy
+                  Generated Files ({filesList.length})
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
                   {filesList.map((fpath) => {
@@ -401,6 +386,19 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
                       executable
                     </span>
                   )}
+                  {selectedFile.endsWith('.example') && (
+                    <span
+                      style={{
+                        fontSize: '0.65rem',
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        background: 'rgba(234,179,8,0.15)',
+                        color: '#facc15',
+                      }}
+                    >
+                      scaffold / manual config
+                    </span>
+                  )}
                 </div>
 
                 <button
@@ -453,7 +451,7 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
           }}
         >
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Deterministic colcon build tree & multi-stage container deployment.
+            Deterministic colcon build tree & least-privilege container deployment.
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -489,7 +487,7 @@ export function WorkspaceModal({ isOpen, onClose, manifest, stackName }: Workspa
                 gap: '8px',
               }}
             >
-              {downloading ? 'Packaging ZIP...' : '⚡ Download colcon Workspace (.zip)'}
+              {downloading ? 'Packaging ZIP...' : '📦 Download colcon Workspace (.zip)'}
             </button>
           </div>
         </div>

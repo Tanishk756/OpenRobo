@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+﻿import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WorkspaceModal } from '../../app/stack-builder/WorkspaceModal';
 import * as apiClient from '../../lib/api/client';
@@ -13,7 +13,7 @@ const MOCK_WORKSPACE_PREVIEW: WorkspacePreviewResponse = {
   target_os: 'ubuntu-22.04',
   target_arch: 'x86_64',
   compatibility_verdict: 'COMPATIBLE',
-  file_count: 12,
+  file_count: 5,
   total_bytes: 14500,
   file_tree: {
     name: 'root',
@@ -25,20 +25,30 @@ const MOCK_WORKSPACE_PREVIEW: WorkspacePreviewResponse = {
     },
   },
   files: {
-    'README.md': '# Test AMR Stack â€” Generated ROS 2 Workspace\n\nDeterministic colcon setup.',
+    'README.md': '# Test AMR Stack — Generated ROS 2 Workspace\n\nDeterministic colcon setup.',
     'openrobo.manifest.json': '{\n  "id": "test_amr_stack"\n}',
-    'openrobo.lock.json': '{\n  "lockfile_version": "1.0.0"\n}',
+    'openrobo.lock.json': '{\n  "lockfile_version": "1.1.0"\n}',
     'setup/install_dependencies.sh': '#!/usr/bin/env bash\nsudo apt-get update',
     'docker/Dockerfile': 'FROM ros:humble-ros-base AS base\nWORKDIR /openrobo_ws',
   },
   warnings: [],
   unsupported_components: [],
   selected_adapters: ['nav2', 'slam_toolbox'],
-  generator_version: '0.5.0',
+  generator_version: '0.5.1',
+  readiness_report: {
+    overall_state: 'STATICALLY_VALIDATED',
+    static_validation: 'passed',
+    docker_build: 'not_executed',
+    colcon_build: 'not_executed',
+    runtime_validation: 'not_executed',
+    manual_steps_required: [],
+    evidence_summary: { nav2: 'VERIFIED_ADAPTER' },
+    notes: [],
+  },
   generated_at: '2026-09-17T12:00:00Z',
 };
 
-describe('WorkspaceModal (Milestone 5 Web Integration)', () => {
+describe('WorkspaceModal (Milestone 5.1 Web Integration)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -58,14 +68,13 @@ describe('WorkspaceModal (Milestone 5 Web Integration)', () => {
     );
 
     expect(
-      screen.getByText(/Synthesizing deterministic colcon workspace/i)
+      screen.getByText(/Synthesizing deterministic workspace files & static validation/i)
     ).toBeInTheDocument();
 
     await waitFor(() => {
       expect(previewSpy).toHaveBeenCalled();
-      expect(screen.getByText('Workspace & Deployment Generator')).toBeInTheDocument();
-      expect(screen.getByText('COMPATIBLE')).toBeInTheDocument();
-      expect(screen.getByText('12')).toBeInTheDocument();
+      expect(screen.getByText('Workspace Synthesis & Deployment Preview')).toBeInTheDocument();
+      expect(screen.getByText('STATICALLY_VALIDATED')).toBeInTheDocument();
       expect(screen.getByText(/Deterministic colcon setup/i)).toBeInTheDocument();
     });
   });

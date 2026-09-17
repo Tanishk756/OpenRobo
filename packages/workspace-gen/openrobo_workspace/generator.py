@@ -25,14 +25,18 @@ from openrobo_workspace.generators.rosdep import (
 )
 from openrobo_workspace.lockfile import generate_lockfile
 from openrobo_workspace.models import (
+    DockerDeploymentProfile,
     GeneratedFile,
+    MaintainerInfo,
     WorkspaceGenerationPlan,
     WorkspacePreviewResponse,
     WorkspaceResult,
+    WorkspaceValidationResult,
 )
 from openrobo_workspace.planner import WorkspacePlanner
+from openrobo_workspace.validator import WorkspaceValidator
 
-GENERATOR_VERSION = "0.5.0"
+GENERATOR_VERSION = "0.5.1"
 
 
 class WorkspaceGenerator:
@@ -44,6 +48,8 @@ class WorkspaceGenerator:
         registry_metadata: Optional[Dict[str, Dict[str, Any]]] = None,
         compatibility_result: Optional[Dict[str, Any]] = None,
         allow_incompatible: bool = False,
+        docker_profile: DockerDeploymentProfile = DockerDeploymentProfile.DEFAULT,
+        maintainer: Optional[MaintainerInfo] = None,
     ):
         self.raw_manifest = stack_manifest
         self.planner = WorkspacePlanner(
@@ -51,6 +57,8 @@ class WorkspaceGenerator:
             registry_metadata=registry_metadata,
             compatibility_result=compatibility_result,
             allow_incompatible=allow_incompatible,
+            docker_profile=docker_profile,
+            maintainer=maintainer,
         )
 
     def generate_files(self) -> tuple[WorkspaceGenerationPlan, List[GeneratedFile]]:
@@ -90,11 +98,23 @@ class WorkspaceGenerator:
 
         # Sort files by path for strict determinism
         files = sorted(files, key=lambda f: f.path)
+
+        # 7. Run Static Analysis Validation
+        validation = WorkspaceValidator.validate_files(files, plan)
+        if plan.readiness_report:
+            plan.readiness_report.static_validation = validation.status
+
         return plan, files
+
+    def validate(self) -> WorkspaceValidationResult:
+        """Run static validation against synthesized workspace files."""
+        plan, files = self.generate_files()
+        return WorkspaceValidator.validate_files(files, plan)
 
     def preview(self) -> WorkspacePreviewResponse:
         """Produce an in-memory preview of the workspace files and file tree."""
         plan, files = self.generate_files()
+        validation = WorkspaceValidator.validate_files(files, plan)
         file_tree = build_file_tree(files)
         total_bytes = sum(len(f.content.encode("utf-8")) for f in files)
 
@@ -113,15 +133,18 @@ class WorkspaceGenerator:
             total_bytes=total_bytes,
             file_tree=file_tree,
             files=files_content_map,
-            warnings=plan.warnings,
+            warnings=plan.warnings + validation.warnings,
             unsupported_components=plan.unsupported_components,
             selected_adapters=plan.launch_components,
             generator_version=GENERATOR_VERSION,
+            readiness_report=plan.readiness_report,
+            validation_result=validation,
         )
 
     def export_directory(self, target_dir: str) -> WorkspaceResult:
         """Write all generated files to disk safely."""
         plan, files = self.generate_files()
+        validation = WorkspaceValidator.validate_files(files, plan)
         written_paths = write_workspace_to_disk(target_dir, files)
         file_tree = build_file_tree(files)
         total_bytes = sum(len(f.content.encode("utf-8")) for f in files)
@@ -134,9 +157,11 @@ class WorkspaceGenerator:
             file_count=len(written_paths),
             total_bytes=total_bytes,
             file_tree=file_tree,
-            warnings=plan.warnings,
+            warnings=plan.warnings + validation.warnings,
             unsupported_components=plan.unsupported_components,
             generator_version=GENERATOR_VERSION,
+            readiness_report=plan.readiness_report,
+            validation_result=validation,
         )
 
     def export_archive(self) -> bytes:

@@ -1,29 +1,39 @@
-# Milestone 6 — Simulation & Runtime Integration (Implementation Plan)
+﻿# Milestone 6 — Simulation & Runtime Integration (Implementation Plan)
 
-**Milestone:** M6 — Simulation & Runtime Integration  
-**Status:** PROPOSED & PLANNED (Do NOT Implement in M5)  
-**Author:** OpenRobo Maintainers  
+**Milestone:** M6 — Simulation & Runtime Integration
+**Status:** PROPOSED & PLANNED (Do NOT Implement in M5.1)
+**Author:** Tanishk Singhal / OpenRobo Maintainers
 
 ---
 
 ## 1. Milestone Objective
 
-Milestone 6 expands OpenRobo from static stack design and workspace synthesis into **live simulation orchestration and runtime introspection**. M6 bridges generated colcon workspaces with actual execution engines (Gazebo, Webots, MuJoCo) and provides live health and telemetry monitoring for running ROS 2 computation graphs.
+Milestone 6 expands OpenRobo from static stack design and workspace synthesis (M5.1) into **live simulation orchestration, container build verification, and runtime introspection**.
+
+M6 transitions generated workspaces across the formal OpenRobo Readiness Continuum:
+
+```
+[ STATICALLY_VALIDATED ]   (Milestone 5.1 — Syntax, AST, XML, YAML Validated)
+          ↓
+[ BUILD_VERIFIED ]         (Milestone 6.1 — Headless Container & Colcon Build Verification)
+          ↓
+[ RUNTIME_VERIFIED ]       (Milestone 6.2 — Live Simulation, Node Heartbeat & QoS Introspection)
+```
 
 ---
 
 ## 2. Core Architectural Pillars
 
 ```
-+-------------------------------------------------------------+
-|             OpenRobo Simulation & Runtime (M6)               |
-+-------------------------------------------------------------+
++-------------------------------------------------------------------------+
+|                  OpenRobo Simulation & Runtime (M6)                     |
++-------------------------------------------------------------------------+
    |                             |                          |
    v                             v                          v
-[ Simulation Adapters ]  [ Graph Introspection ]  [ Telemetry & Bags ]
- - Gazebo (Harmonic)       - Node / Topic Status     - Rosbag2 Ingestion
- - Webots 2024             - QoS Profile Matching    - Latency Profiling
- - MuJoCo Physics          - Rate & Drop Metrics     - Diagnostics / MCAP
+[ Simulation Orchestration ]  [ Runtime Introspection ]  [ Telemetry & Bags ]
+ - Gazebo (Harmonic/Fortress)  - Node / Topic Status      - Rosbag2 Ingestion
+ - Webots 2024                 - QoS Profile Matching     - Latency Profiling
+ - MuJoCo Physics Engine       - Rate & Drop Metrics      - Diagnostics / MCAP
 ```
 
 ### 2.1 Deep Simulation Adapters
@@ -35,58 +45,26 @@ Milestone 6 expands OpenRobo from static stack design and workspace synthesis in
 - **MuJoCo**:
   - MJCF XML physics model importer and fast reinforcement learning simulation bindings.
 
-### 2.2 ROS 2 Graph Introspection & Health Monitoring
+### 2.2 Container Build Execution & Colcon Verification
+- Controlled container build runners executing inside Docker/Podman environments to upgrade workspace readiness from `STATICALLY_VALIDATED` to `BUILD_VERIFIED`.
+- Captures compiler diagnostics, missing system dependencies, and rosdep resolution logs.
+
+### 2.3 ROS 2 Graph Introspection & Health Monitoring
 - Lightweight introspector service (`openrobo-runtime` / rclpy daemon) querying active ROS 2 computational graph:
   - Discovered active nodes, publishers, subscriptions, services, and actions.
   - QoS profile compatibility analysis (e.g. Transient Local vs Volatile, Best Effort vs Reliable).
   - Real-time message frequency and jitter measurements.
-- Health status reporter displaying graph topology vs planned stack design.
+- Health status reporter displaying graph topology vs planned stack design to verify `RUNTIME_VERIFIED` status.
 
-### 2.3 Rosbag2 Telemetry & Log Ingestion
+### 2.4 Rosbag2 Telemetry & Log Ingestion
 - MCAP and SQLite3 rosbag recording orchestrator.
 - Static log inspector analyzing recorded bag files for dropped frames, topic stalls, and transform (`tf2`) tree discrepancies.
 
 ---
 
-## 3. Package Structure (Proposed)
+## 3. Implementation Phasing for M6
 
-```
-packages/simulation-adapters/
-    openrobo_sim/
-        __init__.py
-        models.py
-        gazebo/
-            world_builder.py
-            bridge_router.py
-            sdf_spawner.py
-        webots/
-            world_builder.py
-            supervisor.py
-        mujoco/
-            mjcf_importer.py
-
-packages/runtime-monitor/
-    openrobo_runtime/
-        __init__.py
-        introspection.py
-        qos_checker.py
-        diagnostics.py
-        bag_inspector.py
-```
-
----
-
-## 4. Phased Implementation Roadmap
-
-1. **Phase 1: Simulation Abstraction Model**: Define `SimulationAdapter` base interface and environment target models.
-2. **Phase 2: Gazebo Deep Integration**: Implement automated SDF world builder and `ros_gz_bridge` YAML synthesizers.
-3. **Phase 3: Webots & MuJoCo Bridges**: Add Webots supervisor driver and MuJoCo physics importer.
-4. **Phase 4: Runtime Introspection Service**: Build rclpy-based graph inspector querying running ROS nodes and QoS mismatches.
-5. **Phase 5: Rosbag Telemetry Engine**: Ingest and profile MCAP bags with diagnostic metrics.
-6. **Phase 6: Web Studio Runtime Tab**: Live graph viewer and health dashboard in Next.js web application.
-
----
-
-## 5. Non-Goals for Milestone 6
-- Live cloud fleet deployment (reserved for M7+).
-- Proprietary simulation platforms (Isaac Sim deep proprietary bindings will follow after open standards).
+1. **M6.1 — Build Verification Runner**: Automated headless container compilation service verifying colcon build outputs.
+2. **M6.2 — Simulation Bridge & World Generation**: Generates explicit SDF / URDF / ros_gz_bridge definitions for simulation stacks.
+3. **M6.3 — Live ROS Graph Introspector**: WebSocket-streamed node and topic health inspection daemon.
+4. **M6.4 — Web & CLI Runtime Visualizer**: Real-time graph visualization in Next.js web studio and CLI.
