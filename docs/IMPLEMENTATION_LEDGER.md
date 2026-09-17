@@ -71,3 +71,14 @@
 | **REQ-M7-09** | 100-Agent Control-Plane Simulation | `VERIFIED` | Concurrent 100-agent key generation, enrollment token consumption, X.509 cert issuance, and concurrent heartbeat cycles (100% success, 0 errors) | `simulate_fleet_load.py` | `scripts/simulate_fleet_load.py`, `docs/M7_1_VERIFICATION_REPORT.md` | Local simulation benchmark | Production benchmark |
 
 ---
+
+## Milestone 7.1.1 - Fleet Security Boundary Closure & Real mTLS Verification
+
+| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
+|---|---|---|---|---|---|---|---|
+| **REQ-M7-10** | Real HTTP mTLS Client Transport | `VERIFIED` | Python `ssl.SSLContext` loading client cert, private key, and server CA with TLS 1.2+ minimum; rejects plaintext HTTP in production | `test_real_mtls_transport.py` | `openrobo_agent/transport.py` | None | Real TLS transport |
+| **REQ-M7-11** | Header Spoofing Elimination | `VERIFIED` | Removed `client_cert_header_override`; proxy headers accepted strictly from trusted proxy subnets | `test_real_mtls_transport.py`, `test_fleet_api.py` | `apps/api/services/fleet_security.py` | None | Strict trust boundary |
+| **REQ-M7-12** | Dev CA Hard Gate & Persistence | `VERIFIED` | `DevelopmentCA` hard gate requiring `OPENROBO_DEV_CA=true`; persists `ca.key` (0600) and `ca.crt` on disk | `test_certificates.py` | `openrobo_agent/certificates.py` | Dev PKI only | Production CA integration |
+| **REQ-M7-13** | Enrollment Expiry Race & Binding | `VERIFIED` | Atomic update enforces `expires_at > :now` and checks token device binding | `test_fleet_api.py` | `apps/api/routers/fleet.py` | None | Hardened enrollment |
+| **REQ-M7-14** | Authenticated WebSocket Sessions | `VERIFIED` | Pre-authenticates client certificate, validates `MessageEnvelope`, enforces allowlist, and drops on revocation | `test_fleet_api.py` | `apps/api/routers/fleet.py` | In-memory connection registry | Distributed registry in M8 |
+| **REQ-M7-15** | Admin API Endpoint Authorization | `VERIFIED` | Protected control-plane endpoints with `X-OpenRobo-Admin-Key` / Bearer token | `test_fleet_api.py` | `apps/api/services/fleet_security.py`, `apps/api/routers/fleet.py` | In-memory admin key check | RBAC in M8 |

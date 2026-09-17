@@ -1,142 +1,137 @@
-﻿# OpenRobo Agent & Fleet Security Model (Milestone 7.1)
+﻿# OpenRobo Agent & Fleet Security Model (Milestone 7.1.1)
 
-**Document:** Agent & Fleet Security Model  
-**Version:** 1.0.0 (M7.1)  
-**Maintainer:** Tanishk Singhal  
-**Classification:** Open Source Security Architecture  
+**Document:** Agent & Fleet Security Model
+**Version:** 1.1.0 (Milestone 7.1.1 Closure)
+**Maintainer:** Tanishk Singhal
+**Classification:** Open Source Security Architecture & Trust Model
 
 ---
 
 ## 1. Core Trust Boundaries
 
-OpenRobo's distributed architecture separates untrusted edge environments from the central control plane:
+OpenRobo separates untrusted edge environments from the central control plane with cryptographic identity and explicit transport termination models:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Robot / Edge Device                  │
-│                                                         │
-│  ┌──────────────────┐          ┌─────────────────────┐  │
-│  │   ROS 2 Graph    │          │  openrobo-agent     │  │
-│  │ (Nodes, Topics)  │◄─────────┤ (Read-Only Sensors) │  │
-│  └──────────────────┘          └──────────┬──────────┘  │
-│                                           │             │
-│                       Local Key Storage (0600)          │
-│                       [Ed25519 Private Key]             │
-└───────────────────────────────────────────┼─────────────┘
-                                            │
++-------------------------------------------------------------+
+|                     Robot / Edge Device                     |
+|                                                             |
+|  +------------------+          +-------------------------+  |
+|  |   ROS 2 Graph    |          |     openrobo-agent      |  |
+|  | (Nodes, Topics)  | <------> |  (Read-Only Collectors) |  |
+|  +------------------+          +-------------------------+  |
+|                                             |               |
+|                         Local Key Storage (0600)            |
+|                         [Ed25519 Private Key]               |
++-------------------------------------------------------------+
+                                              |
                    Mutual TLS (mTLS) Transport
                    [Client Cert + Strict Envelope]
-                                            │
-┌───────────────────────────────────────────▼─────────────┐
-│                  OpenRobo Control Plane                 │
-│                                                         │
-│  ┌───────────────────────┐   ┌───────────────────────┐  │
-│  │ FastDDS / WebSocket   │   │ Fleet Device Registry │  │
-│  │ Termination           ├──►│ (Hashed Tokens,       │  │
-│  │ Replay Deduplication  │   │  Revocation State)    │  │
-│  └───────────────────────┘   └───────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+                                              |
++-------------------------------------------------------------+
+|                   OpenRobo Control Plane                    |
+|                                                             |
+|  +--------------------------+   +------------------------+  |
+|  | Direct mTLS / Reverse    |   | Fleet Device Registry  |  |
+|  | Proxy Header Sanitizer   |   | (Hashed Tokens, Single |  |
+|  | Replay & Rate Limiter    |   |  Use, Revocation State)|  |
+|  +--------------------------+   +------------------------+  |
++-------------------------------------------------------------+
 ```
 
 ### 1.1 Non-Negotiable Invariants
-1. **No Remote Code Execution:** The agent does NOT expose any shell execution, script execution, or `eval()` interface. All control messages are strictly typed, read-oriented enums.
-2. **Key Exclusivity:** Device private keys are generated on the robot using `cryptography` (Ed25519 or ECDSA P-256) with `0600` permissions. Private keys are never transmitted over the network or saved centrally.
-3. **No Unauthenticated State Mutations:** All telemetry ingestion requires valid mTLS certificate authentication.
-4. **No Trust of Client Headers:** Headers such as `X-Device-ID` or `X-Certificate-Fingerprint` are never trusted unless explicitly operating in `proxy-certificate` mode behind a configured, sanitizing reverse proxy.
+1. **No Remote Code Execution:** The agent does NOT expose any shell execution, script execution, or `eval()` interface. Remote commands are restricted to a strict read-oriented enum (`PING`, `GET_AGENT_INFO`, `GET_RUNTIME_STATUS`, `GET_ROS_ENVIRONMENT`, `GET_ROS_GRAPH`, `GET_RUNTIME_DIAGNOSTICS`, `GET_CONNECTION_INSPECTOR_STATUS`, `GET_SIMULATOR_STATUS`). Primitives such as `EXEC`, `SHELL`, `RUN_SCRIPT` are completely prohibited.
+2. **Key Exclusivity:** Device private keys are generated on the robot using the mature `cryptography` package (Ed25519 or ECDSA P-256) and saved with restrictive `0600` permissions. Private keys are never transmitted over the network or persisted centrally.
+3. **Primary Identity:** The primary identity is `device_id` (UUIDv4) + locally generated private key + signed X.509 Device Certificate. Hardware fingerprinting is optional telemetry metadata, never an authentication root.
+4. **No Trust of Client Headers:** Client-supplied identity headers (`X-Client-Cert-Fingerprint`, `X-OpenRobo-Cert-Fingerprint`) are rejected unless operating in explicit reverse-proxy mode originating from a configured trusted proxy subnet.
 
 ---
 
-## 2. Cryptographic Device Identity & PKI
+## 2. TLS Termination & Proxy Trust Models
 
-### 2.1 Identity Hierarchy
-1. **Primary Root Identity:** `device_id` (UUIDv4) + locally generated private key (Ed25519) + signed X.509 Device Certificate.
-2. **Secondary Anomaly Signals:** OS, architecture, kernel version, hostname hash (used only for telemetry and anomaly detection, NEVER for authentication).
+OpenRobo defines two explicit transport termination models:
 
-### 2.2 Certificate Specifications
+### Mode A: Direct mTLS (`DIRECT_MTLS`)
+- The ASGI application / HTTP server performs direct mutual TLS handshake.
+- Client presents X.509 certificate signed by the trusted fleet CA.
+- Verification checks validity window (`not_valid_before`, `not_valid_after`), chain of trust, and revocation status.
+
+### Mode B: Trusted Reverse-Proxy mTLS (`TRUSTED_PROXY_MTLS`)
+- An edge reverse proxy (e.g. Nginx, Traefik, Envoy, Caddy) terminates mTLS and validates client certificates.
+- The proxy sanitizes and injects `X-SSL-Client-Fingerprint` or `X-Client-Cert-Fingerprint`.
+- OpenRobo accepts certificate identity headers ONLY when:
+  1. `OPENROBO_PROXY_CERT_AUTH=true` is explicitly enabled.
+  2. The incoming TCP request originates from an IP address in `OPENROBO_TRUSTED_PROXIES` (e.g. `127.0.0.1`, internal Kubernetes cluster CIDR).
+  3. Requests originating from untrusted source IPs have proxy headers stripped and ignored.
+
+---
+
+## 3. Cryptographic Device Identity & PKI
+
+### 3.1 Certificate Specifications
 - **Format:** X.509 v3
-- **Subject Common Name (CN):** `device_id` (e.g. `openrobo-device:urn:uuid:<UUID>`)
+- **Subject Common Name (CN):** `openrobo-device:{device_id}`
 - **Key Algorithm:** Ed25519 (or ECDSA NIST P-256)
-- **Signature Algorithm:** Ed25519 (or SHA256withECDSA)
-- **Validity Window:** Configurable (default 90 days in production; short-lived development certs).
+- **Signature Algorithm:** PureEd25519 (or SHA256withECDSA)
+- **Validity Source:** `not_valid_after_utc` parsed directly from the issued certificate.
 - **Fingerprint:** SHA-256 over DER-encoded certificate.
 
-### 2.3 Local Development CA
-- Development PKI is handled via `openrobo_agent.certificates.DevelopmentCA`.
-- **Safety Gate:** The development CA requires explicit activation via `OPENROBO_DEV_CA=true` or an explicit developer initialization command. In production mode, the server warns or refuses if dev CA material is detected.
+### 3.2 Certificate Authority Abstraction & Dev CA Hard Gate
+- The PKI subsystem implements an abstract `CertificateAuthority` interface.
+- **Development CA (`DevelopmentCA`):**
+  - Hard-gated behind `OPENROBO_DEV_CA=true`.
+  - Instantiation in `production` environment raises `RuntimeError`.
+  - Instantiation without `OPENROBO_DEV_CA=true` raises `PermissionError`.
+  - Persistent storage: Writes `ca.key` (0600 permissions) and `ca.crt` to `.openrobo/ca` to preserve CA root identity across restarts.
 
 ---
 
-## 3. Enrollment Protocol
+## 4. Enrollment Protocol & Token Lifecycle
 
-```
-Agent                                                     Control Plane
-  │                                                             │
-  │                     1. Admin creates token                  │
-  │                     ───────────────────────────────────────►│ (Stores SHA-256 hash)
-  │                                                             │
-  │ 2. Agent receives token + URL                               │
-  │                                                             │
-  │ 3. Generates Ed25519 Keypair locally (0600)                 │
-  │ 4. Generates X.509 CSR with device UUID                     │
-  │                                                             │
-  │ 5. POST /api/v1/fleet/enroll (token, CSR, metadata)         │
-  │ ───────────────────────────────────────────────────────────►│
-  │                                                             │ 6. Validates token hash & expiry
-  │                                                             │ 7. Transactionally marks token USED
-  │                                                             │ 8. Signs CSR with CA key
-  │                                                             │ 9. Registers FleetDeviceModel
-  │ 10. Returns signed certificate + CA cert chain              │
-  │◄────────────────────────────────────────────────────────────│
-  │                                                             │
-  │ 11. Stores certificate with 0600 permissions                │
-  │ 12. Connects via mTLS WebSocket                             │
-  │ ═══════════════════════════════════════════════════════════►│
-```
-
-### 3.1 Race Condition & Concurrency Defense
-- The enrollment token is validated and invalidated within an atomic database transaction (`SELECT ... FOR UPDATE` or transactional update).
-- If two concurrent requests attempt to consume the same token, exactly one succeeds; the other receives `400 Bad Request: Token already consumed or invalid`.
+1. **Token Generation:** Administrative endpoint `POST /fleet/enrollment-tokens` generates a cryptographically secure token (`orb_tok_<32_bytes_urlsafe>`). Only the SHA-256 hash is stored in the database.
+2. **Device Binding:** Tokens may be pre-bound to a specific `device_name` or `device_id`. Mismatched enrollment requests are rejected with `403 Forbidden`.
+3. **Atomic Consumption & Expiry Check:**
+   ```sql
+   UPDATE agent_enrollment_tokens
+   SET is_used = true, used_at = :now, used_by_device_id = :device_id
+   WHERE token_hash = :hash AND is_used = false AND expires_at > :now
+   ```
+   Single-use consumption is enforced transactionally, preventing double-use race conditions.
+4. **CSR Validation:** Control plane verifies CSR cryptographic signature, supported public key algorithms, and Common Name match before signing.
 
 ---
 
-## 4. Replay Protection & Envelope Validation
+## 5. Protocol Envelope & Replay Protection
 
-Every message transmitted over the transport protocol uses the standardized `MessageEnvelope`:
+Every message conforms to `MessageEnvelope`:
+- `protocol_version` (strictly `"1.0"` or `"1.1"`)
+- `message_id` (UUIDv4)
+- `device_id` (Device UUID)
+- `timestamp` (ISO-8601 UTC)
+- `message_type` (Enum)
+- `payload` (JSON Dictionary)
 
-```json
-{
-  "protocol_version": "1.0",
-  "message_id": "urn:uuid:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-  "device_id": "urn:uuid:550e8400-e29b-41d4-a716-446655440000",
-  "timestamp": "2026-09-17T14:30:00.000Z",
-  "message_type": "HEARTBEAT",
-  "payload": { ... }
-}
-```
-
-### 4.1 Server-Side Replay Defense Rules
-1. **Clock Skew Window:** `abs(now() - envelope.timestamp) <= MAX_CLOCK_SKEW` (default 60s). Messages outside the window are rejected.
-2. **Deduplication Cache:** The server maintains an in-memory bounded LRU / TTL cache of recent `(device_id, message_id)` tuples. Replayed message IDs are immediately rejected.
-3. **Identity Match:** `envelope.device_id` must strictly match the authenticated client certificate subject CN. Cross-device spoofing is rejected with `403 Forbidden`.
+### 5.1 Replay Protection Semantics
+- Sliding timestamp window (±60 seconds). Messages with stale or future timestamps exceeding clock skew are rejected (`400 Bad Request`).
+- Bounded in-memory deduplication store (50,000 entries) tracking `(device_id, message_id)`. Replayed messages are rejected (`409 Conflict`).
 
 ---
 
-## 5. Offline Telemetry Spool
+## 6. Authorization & Revocation Enforcement
 
-The agent incorporates an `OfflineTelemetrySpool` backed by SQLite:
-- **FIFO Eviction:** When `max_events` (default 5,000) or `max_bytes` (default 50 MB) is reached, the oldest unacknowledged events are dropped.
-- **TTL Eviction:** Telemetry older than `max_age_days` (default 7 days) is automatically pruned.
-- **Delivery Guarantee:** `at-least-once`. Server deduplication prevents duplicate processing on reconnect.
+1. **Device Isolation:** Authenticated device $A$ can only read/write resources belonging to device $A$. Cross-device writes return `403 Forbidden`.
+2. **Immediate Revocation Effect:**
+   - Database record updated to `status = 'REVOKED'` and `revoked_at = now()`.
+   - Active WebSocket connections for the revoked device are closed immediately with WebSocket code `1008` (Policy Violation).
+   - Subsequent heartbeat, telemetry, or WebSocket handshakes return `403 Forbidden`.
 
 ---
 
-## 6. Threat Model & Residual Risks
+## 7. Administrative API Authorization & Rate Limits
 
-| Threat | Mitigation | Residual Risk |
-|---|---|---|
-| **Stolen Enrollment Token** | Single-use, short TTL (e.g. 15 min), stored hashed (SHA-256). Token invalidated immediately upon first enrollment. | Window of vulnerability if token intercepted before legitimate agent enrolls. Admin can revoke device immediately. |
-| **Compromised Robot Device** | Private key stored `0600`. Agent only has read-only operations. Revocation endpoint immediately rejects device. | Attacker with root on robot can exfiltrate private key and send fake telemetry until revoked. Cannot execute remote code on other robots or server. |
-| **Cross-Device Impersonation** | Control plane enforces `cert.subject.device_id == request.device_id`. | None; cryptographic binding prevents cross-device tampering. |
-| **Message Replay Attack** | Sliding timestamp window (±60s) + server-side message ID deduplication cache. | None within the deduplication retention period. |
-| **Man-In-The-Middle (MITM)** | TLS 1.3 with pinned CA certificate validation on both client and server. | None assuming CA integrity. |
-| **Cross-Device Data Exfiltration** | Telemetry schema strictly scrubs environment variables, command line arguments, usernames, and SSIDs. | None; only structured robot health telemetry is transmitted. |
+1. **Admin Authorization:** Control-plane endpoints (`/fleet/enrollment-tokens`, `/fleet/devices`, `/fleet/devices/{id}/revoke`, `/fleet/devices/{id}/telemetry`) require `X-OpenRobo-Admin-Key` or `Authorization: Bearer <key>`.
+2. **Rate Limits & Payload Bounds:**
+   - Token creation: 60 requests / minute.
+   - Device enrollment: 30 requests / minute.
+   - Heartbeat: 180 requests / minute per device.
+   - Telemetry: 300 requests / minute per device (batch limit 500 events).
+   - CSR payload limit: 16KB.
