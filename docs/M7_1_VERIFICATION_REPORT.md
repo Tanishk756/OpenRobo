@@ -11,9 +11,9 @@
 In accordance with strict verification standards, the state of Milestone 7.1 and 7.1.1 deliverables is categorized as follows:
 - **PKI IMPLEMENTED**: Full X.509 PKI lifecycle built upon the mature `cryptography` package with Ed25519/ECDSA support, persistent Development CA with filesystem permissions (0600), and abstract `CertificateAuthority` interface.
 - **mTLS CLIENT IMPLEMENTED**: `HttpTransportClient` implements Python `ssl.SSLContext` loading client certificate, private key, and trusted CA bundle, with minimum TLS 1.2+ enforcement and plaintext HTTP rejection in production.
-- **mTLS SERVER/PROXY VERIFIED**: Formally implemented and verified direct mTLS identity extraction and trusted reverse-proxy header verification with IP allowlisting (`OPENROBO_PROXY_CERT_AUTH` + `OPENROBO_TRUSTED_PROXIES`).
+- **mTLS SERVER/PROXY APPLICATION VERIFIED (Socket mTLS Verified in M7.1.2)**: Formally implemented and verified direct mTLS identity extraction and trusted reverse-proxy header verification with IP allowlisting (`OPENROBO_PROXY_CERT_AUTH` + `OPENROBO_TRUSTED_PROXIES`).
 - **TESTED**: 160/160 Python unit and integration tests passing (`pytest`); 19/19 frontend unit tests passing (`vitest`).
-- **3-AGENT REAL TLS ACCEPTANCE VERIFIED**: 3-Agent full end-to-end integration acceptance test (`robot-alpha`, `robot-beta`, `robot-gamma`) proving cryptographic private key isolation, X.509 certificate enrollment, isolated heartbeats/telemetry, offline SQLite spool buffering, replay rejection, cross-device write rejection (403), and instant revocation.
+- **3-AGENT APPLICATION/PKI ACCEPTANCE VERIFIED**: 3-Agent full end-to-end integration acceptance test (`robot-alpha`, `robot-beta`, `robot-gamma`) proving cryptographic private key isolation, X.509 certificate enrollment, isolated heartbeats/telemetry, offline SQLite spool buffering, replay rejection, cross-device write rejection (403), and instant revocation.
 - **100-AGENT LOCAL CONTROL-PLANE APPLICATION SIMULATION**: 100-agent local control-plane application simulation executing concurrent Ed25519 key generation, single-use token consumption, X.509 certificate issuance, and concurrent heartbeat cycles with 100% success rate and zero errors (585.67ms p50 latency).
 
 ---

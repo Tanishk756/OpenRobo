@@ -23,16 +23,29 @@ Milestone 7.2 transitions OpenRobo from passive read-oriented fleet observation 
 - **Atomic Symlinking**: Atomic symlink switch (`current -> slot-b`) only after full pre-flight verification passes.
 - **Process Supervision**: Agent manages ROS 2 launch processes using `systemd` user services or isolated child process groups with graceful `SIGINT`/`SIGTERM` handling.
 
-### 2.3 Pre-Flight & Post-Flight Health Gates
-- **Pre-Flight Gates**:
-  - Target architecture compatibility (x86_64, aarch64).
-  - ROS 2 distro alignment (Humble, Iron, Jazzy).
-  - Minimum battery threshold (e.g., &ge; 30% battery required before applying updates).
-  - E-Stop / Robot motion safety check (robot must be stationary/docked).
-- **Post-Flight Health Gates**:
-  - Live ROS 2 node/topic graph introspection matching expected contract within 15 seconds.
-  - No crashloops or repeated node restarts.
-  - Heartbeat remains `ONLINE` with nominal CPU and memory metrics.
+### 2.3 Pre-Flight & Post-Flight Health Gates & Platform-Specific Deployment Policies
+- **Platform-Specific Deployment Policies (`DeploymentSafetyPolicy`)**:
+  - Do NOT use universal hardcoded thresholds (such as universal battery >= 30% or stationary requirements) across heterogeneous robots.
+  - Policies are resource- and platform-specific, explicitly configured, and evidence-backed:
+    ```yaml
+    deployment_safety_policy:
+      platform_type: "ugv_differential_drive"
+      battery_requirement:
+        enabled: true
+        threshold_percent: 30.0
+        telemetry_source: "sensor_msgs/BatteryState"
+      motion_requirement:
+        enabled: true
+        required_state: "STATIONARY"
+        telemetry_source: "geometry_msgs/Twist"
+        max_linear_velocity: 0.01
+      estop_requirement:
+        enabled: true
+        state_source: "std_msgs/Bool"
+        safe_states: ["ENGAGED", "ACTIVE"]
+      on_unknown_state: "BLOCK_DEPLOYMENT"
+    ```
+  - **Explicit Unknown-State Policy**: If any configured telemetry source is unavailable or unknown, deployment is strictly **BLOCKED**. No guessing or optimistic assumptions.
 
 ### 2.4 Automatic Rollback Mechanism
 - If post-flight health verification fails or times out:

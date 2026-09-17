@@ -2,7 +2,7 @@
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import (
     APIRouter,
@@ -96,6 +96,10 @@ class TokenResponse(BaseModel):
 
 class RevokeDeviceRequest(BaseModel):
     reason: str = Field(default="Administrative revocation", description="Reason for certificate revocation")
+
+
+class TelemetryBatchRequest(BaseModel):
+    messages: List[MessageEnvelope]
 
 
 class DeviceSummary(BaseModel):
@@ -561,10 +565,12 @@ async def ingest_telemetry(
 
 @router.post("/agent/telemetry-batch", status_code=status.HTTP_200_OK)
 async def ingest_telemetry_batch(
-    envelopes: List[MessageEnvelope],
+    payload: Union[TelemetryBatchRequest, List[MessageEnvelope]],
     device: FleetDeviceModel = Depends(get_authenticated_device),
     db: AsyncSession = Depends(get_db),
 ):
+    envelopes = payload.messages if isinstance(payload, TelemetryBatchRequest) else payload
+
     if len(envelopes) > 500:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -607,39 +613,25 @@ async def ingest_telemetry_batch(
 async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
     """
     Authenticated edge agent WebSocket endpoint.
-    Enforces certificate identity, message envelopes, replay protection, and operation allowlists.
+    Strict mTLS/reverse-proxy authentication: connection is rejected immediately if
+    no verified client certificate identity is presented.
     """
     extractor = get_identity_extractor()
     fingerprint = extractor.extract_device_fingerprint(websocket)
 
-    device: Optional[FleetDeviceModel] = None
-    if fingerprint:
-        stmt = select(FleetDeviceModel).where(FleetDeviceModel.certificate_fingerprint == fingerprint)
-        result = await db.execute(stmt)
-        device = result.scalar_one_or_none()
+    if not fingerprint:
+        # Strict security: Close immediately if no verified certificate identity is present.
+        # No unauthenticated frame fallback.
+        await websocket.close(code=1008, reason="Client certificate authentication required")
+        return
 
-    # If not pre-authenticated via TLS handshake/proxy headers, accept temporarily for initial AUTH handshake frame
-    await websocket.accept()
+    stmt = select(FleetDeviceModel).where(FleetDeviceModel.certificate_fingerprint == fingerprint)
+    result = await db.execute(stmt)
+    device = result.scalar_one_or_none()
 
     if not device:
-        # Require immediate AUTH frame
-        try:
-            auth_frame = await websocket.receive_text()
-            auth_data = json.loads(auth_frame)
-            cert_fp = auth_data.get("fingerprint") or auth_data.get("certificate_fingerprint")
-            if not cert_fp:
-                await websocket.close(code=1008, reason="Authentication Required")
-                return
-
-            stmt = select(FleetDeviceModel).where(FleetDeviceModel.certificate_fingerprint == cert_fp.lower())
-            result = await db.execute(stmt)
-            device = result.scalar_one_or_none()
-            if not device:
-                await websocket.close(code=1008, reason="Unknown Device Certificate")
-                return
-        except Exception:
-            await websocket.close(code=1008, reason="Authentication Handshake Failed")
-            return
+        await websocket.close(code=1008, reason="Unknown Device Certificate")
+        return
 
     # Check Revocation & Expiry
     if device.revoked_at is not None or device.status == "REVOKED":
@@ -651,6 +643,9 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
         if parsed.get("is_expired"):
             await websocket.close(code=1008, reason="Device Certificate Expired")
             return
+
+    # Verified authenticated identity -> Accept session
+    await websocket.accept()
 
     ws_registry = get_websocket_registry()
     ws_registry.register(device.id, websocket)

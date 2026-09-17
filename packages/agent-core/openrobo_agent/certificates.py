@@ -91,9 +91,14 @@ def generate_agent_key_and_csr(device_id: str, display_name: str = "robot-node")
 def compute_cert_fingerprint(cert_pem_or_bytes: str | bytes) -> str:
     """Compute SHA-256 fingerprint of an X.509 certificate."""
     if isinstance(cert_pem_or_bytes, str):
-        cert = x509.load_pem_x509_certificate(cert_pem_or_bytes.encode("utf-8"))
+        data = cert_pem_or_bytes.encode("utf-8")
     else:
-        cert = x509.load_der_x509_certificate(cert_pem_or_bytes)
+        data = cert_pem_or_bytes
+
+    if b"-----BEGIN CERTIFICATE-----" in data:
+        cert = x509.load_pem_x509_certificate(data)
+    else:
+        cert = x509.load_der_x509_certificate(data)
     return cert.fingerprint(hashes.SHA256()).hex()
 
 

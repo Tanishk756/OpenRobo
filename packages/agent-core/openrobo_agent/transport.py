@@ -34,6 +34,11 @@ class TransportClient(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def send_heartbeat(self, envelope: MessageEnvelope) -> Dict[str, Any]:
+        """Send a dedicated heartbeat message envelope."""
+        pass
+
+    @abc.abstractmethod
     def send_batch(self, envelopes: List[MessageEnvelope]) -> List[str]:
         """Send a batch of message envelopes and return list of acknowledged message IDs."""
         pass
@@ -72,7 +77,8 @@ class HttpTransportClient(TransportClient):
 
     def _validate_and_build_transport(self) -> None:
         is_https = self.base_url.lower().startswith("https://")
-        is_dev = os.getenv("ENVIRONMENT", "production").lower() == "development"
+        env_mode = os.getenv("ENVIRONMENT", "production").lower()
+        is_dev = env_mode == "development"
         allow_insecure = os.getenv("OPENROBO_ALLOW_INSECURE_HTTP", "false").lower() in ("true", "1", "yes")
 
         if not is_https:
@@ -84,6 +90,18 @@ class HttpTransportClient(TransportClient):
             logger.warning("Agent transport initialized with plaintext HTTP in development/testing mode.")
             self._opener = urllib.request.build_opener()
             return
+
+        # Production credential check
+        if env_mode == "production" and not allow_insecure:
+            if not (self.cert_path and self.key_path and self.ca_cert_path):
+                raise RuntimeError(
+                    "CRITICAL SECURITY: Production mTLS agent requires cert_path, key_path, and ca_cert_path "
+                    "to be configured and present."
+                )
+            if not (os.path.exists(self.cert_path) and os.path.exists(self.key_path) and os.path.exists(self.ca_cert_path)):
+                raise RuntimeError(
+                    "CRITICAL SECURITY: Configured client certificate, key, or CA certificate file does not exist on disk."
+                )
 
         # Build genuine mTLS SSLContext
         ssl_ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
@@ -124,13 +142,30 @@ class HttpTransportClient(TransportClient):
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def send_heartbeat(self, envelope: MessageEnvelope) -> Dict[str, Any]:
+        endpoint = f"{self.base_url}/api/v1/fleet/agent/heartbeat"
+        headers = {"Content-Type": "application/json"}
+
+        data_bytes = envelope.model_dump_json().encode("utf-8")
+        req = urllib.request.Request(endpoint, data=data_bytes, headers=headers, method="POST")
+
+        opener = self._opener or urllib.request.build_opener()
+        try:
+            with opener.open(req, timeout=10) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            err = e.read().decode("utf-8", errors="replace")
+            return {"success": False, "error": f"HTTP {e.code}: {err}", "status_code": e.code}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     def send_batch(self, envelopes: List[MessageEnvelope]) -> List[str]:
         if not envelopes:
             return []
         endpoint = f"{self.base_url}/api/v1/fleet/agent/telemetry-batch"
         headers = {"Content-Type": "application/json"}
 
-        payload = {"messages": [e.model_dump() for e in envelopes]}
+        payload = {"messages": [e.model_dump(mode="json") for e in envelopes]}
         data_bytes = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(endpoint, data=data_bytes, headers=headers, method="POST")
 

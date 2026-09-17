@@ -31,7 +31,7 @@ OpenRobo separates untrusted edge environments from the central control plane wi
 |                   OpenRobo Control Plane                    |
 |                                                             |
 |  +--------------------------+   +------------------------+  |
-|  | Direct mTLS / Reverse    |   | Fleet Device Registry  |  |
+|  | Trusted Reverse-Proxy mTLS / Direct mTLS (Designed)    |   | Fleet Device Registry  |  |
 |  | Proxy Header Sanitizer   |   | (Hashed Tokens, Single |  |
 |  | Replay & Rate Limiter    |   |  Use, Revocation State)|  |
 |  +--------------------------+   +------------------------+  |
