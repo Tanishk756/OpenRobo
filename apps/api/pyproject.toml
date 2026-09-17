@@ -19,7 +19,9 @@ dependencies = [
     "asyncpg>=0.29.0",
     "psycopg2-binary>=2.9.9",
     "openrobo-schemas",
-    "openrobo-compat"
+    "openrobo-compat",
+    "openrobo-agent",
+    "cryptography>=42.0.0"
 ]
 
 [tool.setuptools.packages.find]
