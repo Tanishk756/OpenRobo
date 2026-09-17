@@ -1,4 +1,4 @@
-"""OpenRobo Agent Long-Lived Service & Systemd Unit Generator."""
+﻿"""OpenRobo Agent Long-Lived Service & Systemd Unit Generator."""
 
 import asyncio
 import logging
@@ -64,13 +64,11 @@ class AgentDaemon:
         self.collector = TelemetryCollector(self.identity_manager)
         self.spool = OfflineTelemetrySpool(config.spool_path, max_events=config.spool_max_events, max_bytes=config.spool_max_bytes)
 
-        cert_fp = self.identity_manager.get_identity().certificate_fingerprint
         self.transport = HttpTransportClient(
             base_url=config.control_plane_url,
             cert_path=str(config.cert_path) if config.cert_path.exists() else None,
             key_path=str(config.key_path) if config.key_path.exists() else None,
             ca_cert_path=str(config.ca_cert_path) if config.ca_cert_path.exists() else None,
-            client_cert_header_override=cert_fp,
         )
         self._running = False
 

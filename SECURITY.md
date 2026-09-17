@@ -54,3 +54,10 @@ OpenRobo enforces strict security controls on local process and container execut
 - **Environment Allowlist**: Only approved environment variables (`ROS_DISTRO`, `ROS_DOMAIN_ID`, `RMW_IMPLEMENTATION`, `AMENT_PREFIX_PATH`, `PATH`) are passed to child processes. Potentially hazardous variables (`LD_PRELOAD`, `PYTHONPATH` overrides, shell injection strings) are rejected.
 - **Filesystem Sandboxing**: Workspace build verification and rosbag telemetry reading enforce canonical path boundary checks to prevent directory traversal and symlink escapes.
 - **Process Ownership**: All spawned ROS processes and Connection Inspector executions are tracked by PID and terminate cleanly with parent runtime sessions.
+
+### 3. Edge Agent Identity, mTLS & Fleet Management (Milestone 7.1.1)
+- **Zero Remote Arbitrary Execution**: The agent only supports a strict read-oriented operations enum (`PING`, `GET_AGENT_INFO`, `GET_RUNTIME_STATUS`, `GET_ROS_ENVIRONMENT`, `GET_ROS_GRAPH`, `GET_RUNTIME_DIAGNOSTICS`, `GET_CONNECTION_INSPECTOR_STATUS`, `GET_SIMULATOR_STATUS`). Remote execution primitives (`SHELL`, `EXEC`, `RUN_SCRIPT`) are explicitly prohibited.
+- **Cryptographic Device PKI**: Device identity root is `device_id` (UUIDv4) + locally generated private key (`0600` permissions) + signed X.509 certificate.
+- **mTLS & Trusted Reverse Proxy Boundaries**: Agent transport presents genuine TLS client certificates via Python `ssl.SSLContext`. Proxy identity headers are accepted strictly from configured trusted proxy subnets.
+- **Single-Use Enrollment Tokens & Anti-Race**: High-entropy tokens stored as SHA-256 hashes with atomic SQL consumption checking `is_used=false AND expires_at > now`.
+- **Replay Protection & Device Isolation**: Sliding-window ±60s clock skew check and bounded in-memory deduplication store. Cross-device writes are blocked with `403 Forbidden`.

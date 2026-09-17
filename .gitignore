@@ -40,3 +40,4 @@ data/
 .idea/
 .vscode/
 *.swp
+.openrobo/

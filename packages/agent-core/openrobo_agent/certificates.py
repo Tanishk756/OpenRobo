@@ -1,14 +1,18 @@
-"""X.509 Certificate, CSR, and Development CA Utilities using cryptography."""
+﻿"""X.509 Certificate, CSR, and Development CA Utilities using cryptography."""
 
+import abc
 import hashlib
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from cryptography.x509.oid import NameOID
+
+from openrobo_agent.security import set_secure_file_permissions
 
 
 def generate_keypair() -> Tuple[ed25519.Ed25519PrivateKey, ed25519.Ed25519PublicKey]:
@@ -117,17 +121,125 @@ def parse_certificate(cert_pem: str) -> Dict[str, Any]:
 parse_certificate_info = parse_certificate
 
 
-class DevelopmentCA:
+def validate_csr_identity(csr_pem: str, expected_device_id: str) -> Tuple[bool, str]:
+    """
+    Validate CSR signature, algorithm support (Ed25519 / ECDSA), and Common Name device identity binding.
+    """
+    try:
+        csr = x509.load_pem_x509_csr(csr_pem.encode("utf-8"))
+    except Exception as e:
+        return False, f"Malformed PEM CSR: {e}"
+
+    if not csr.is_signature_valid:
+        return False, "CSR cryptographic signature verification failed."
+
+    pub_key = csr.public_key()
+    if not isinstance(pub_key, (ed25519.Ed25519PublicKey, ec.EllipticCurvePublicKey)):
+        return False, f"Unsupported public key algorithm '{type(pub_key).__name__}'. Only Ed25519 and ECDSA are permitted."
+
+    cns = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    if not cns:
+        return False, "CSR Subject must contain a Common Name (CN)."
+
+    cn_val = str(cns[0].value)
+    expected_cn = f"openrobo-device:{expected_device_id}"
+    if cn_val != expected_cn and cn_val != expected_device_id:
+        return False, f"CSR Common Name '{cn_val}' does not match requested device_id '{expected_device_id}'."
+
+    return True, ""
+
+
+class CertificateAuthority(abc.ABC):
+    """Abstract Certificate Authority interface for OpenRobo PKI implementations."""
+
+    @abc.abstractmethod
+    def sign_csr(self, csr_pem: str, validity_days: int = 90) -> Tuple[str, str, str, str]:
+        """Sign a client CSR and return (cert_pem, serial_hex, fingerprint_hex, expires_at_iso)."""
+        pass
+
+    @abc.abstractmethod
+    def verify_device_cert(self, cert_pem: str) -> bool:
+        """Verify device certificate signature against CA public key."""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def ca_cert_pem(self) -> str:
+        """Return root CA certificate in PEM format."""
+        pass
+
+    @property
+    def ca_certificate_pem(self) -> str:
+        return self.ca_cert_pem
+
+
+class DevelopmentCA(CertificateAuthority):
     """Local Development Certificate Authority for testing and development only.
 
     NEVER active in production unless OPENROBO_DEV_CA=true is explicitly set.
+    Persists CA key and certificate across restarts if ca_dir is configured.
     """
 
-    def __init__(self, ca_dir: Optional[str] = None):
+    def __init__(self, ca_dir: Optional[str] = None, allow_test_override: bool = False):
         dev_ca_env = os.environ.get("OPENROBO_DEV_CA", "false").lower() in ("true", "1", "yes")
-        self.dev_mode_allowed = dev_ca_env
-        self.ca_dir = ca_dir
+        env_mode = os.environ.get("ENVIRONMENT", "production").lower()
 
+        if not allow_test_override:
+            if env_mode == "production":
+                raise RuntimeError("CRITICAL SECURITY: DevelopmentCA cannot be instantiated in production environment.")
+            if not dev_ca_env:
+                raise PermissionError("Development CA is disabled. Set OPENROBO_DEV_CA=true to initialize development PKI.")
+
+        self.ca_dir = ca_dir
+        self.dev_mode_allowed = True
+
+        if self.ca_dir:
+            ca_path = Path(self.ca_dir)
+            ca_path.mkdir(parents=True, exist_ok=True)
+            key_file = ca_path / "ca.key"
+            cert_file = ca_path / "ca.crt"
+
+            if key_file.exists() and cert_file.exists():
+                # Load persistent CA
+                key_pem = key_file.read_text(encoding="utf-8")
+                cert_pem = cert_file.read_text(encoding="utf-8")
+                self.ca_key = private_key_from_pem(key_pem)
+                self.ca_cert = x509.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+            else:
+                self._generate_and_persist(key_file, cert_file)
+        else:
+            self._generate_ephemeral()
+
+    def _generate_and_persist(self, key_file: Path, cert_file: Path) -> None:
+        self.ca_key, public_key = generate_keypair()
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "OpenRobo Development Root CA"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Dev PKI"),
+        ])
+        now = datetime.now(timezone.utc)
+        self.ca_cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(public_key)
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - timedelta(minutes=5))
+            .not_valid_after(now + timedelta(days=365))
+            .add_extension(
+                x509.BasicConstraints(ca=True, path_length=None),
+                critical=True,
+            )
+            .sign(self.ca_key, None)
+        )
+
+        key_pem = private_key_to_pem(self.ca_key)
+        cert_pem = self.ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+
+        key_file.write_text(key_pem, encoding="utf-8")
+        set_secure_file_permissions(key_file)
+        cert_file.write_text(cert_pem, encoding="utf-8")
+
+    def _generate_ephemeral(self) -> None:
         self.ca_key, public_key = generate_keypair()
         subject = issuer = x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, "OpenRobo Development Root CA"),
@@ -152,10 +264,6 @@ class DevelopmentCA:
     @property
     def ca_cert_pem(self) -> str:
         return self.ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
-
-    @property
-    def ca_certificate_pem(self) -> str:
-        return self.ca_cert_pem
 
     def sign_csr(self, csr_pem: str, validity_days: int = 90) -> Tuple[str, str, str, str]:
         """Sign a client CSR and return (cert_pem, serial_hex, fingerprint_hex, expires_at_iso)."""
