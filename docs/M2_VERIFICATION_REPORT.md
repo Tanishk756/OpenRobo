@@ -1,7 +1,7 @@
 # Milestone 2 Verification Report: Search Engine & Advanced Taxonomy Indexing
 
 ## Executive Summary
-- **Milestone**: Milestone 2 — Search Engine & Advanced Taxonomy Indexing
+- **Milestone**: Milestone 2 â€” Search Engine & Advanced Taxonomy Indexing
 - **Status**: **VERIFIED & COMPLETE**
 - **Date**: September 2026
 - **Target Repository**: [https://github.com/Tanishk756/OpenRobo](https://github.com/Tanishk756/OpenRobo)
@@ -41,16 +41,16 @@ packages\cli\tests\test_cli.py .......                                   [100%]
 ```
  RUN  v1.6.1 C:/OpenRobo/apps/web
 
- ✓ tests/unit/page.test.tsx  (1 test) 102ms
- ✓ tests/unit/resources.test.tsx  (5 tests) 1392ms
+ âœ“ tests/unit/page.test.tsx  (1 test) 102ms
+ âœ“ tests/unit/resources.test.tsx  (5 tests) 1392ms
 
  Test Files  2 passed (2)
       Tests  6 passed (6)
 
 Route (app)                              Size     First Load JS
-┌ ○ /                                    2.43 kB        93.5 kB
-├ ○ /_not-found                          883 B          85.1 kB
-└ ○ /resources                           8.27 kB        99.4 kB
+â”Œ â—‹ /                                    2.43 kB        93.5 kB
+â”œ â—‹ /_not-found                          883 B          85.1 kB
+â”” â—‹ /resources                           8.27 kB        99.4 kB
 + First Load JS shared by all            84.3 kB
 ```
 - **Total Frontend Unit Tests**: 6 passed, 0 failed.
@@ -98,3 +98,13 @@ Route (app)                              Size     First Load JS
 | **Pull Request Template** | `.github/PULL_REQUEST_TEMPLATE.md` | Verification checklist and guidelines |
 | **GitHub Description** | Remote metadata | Updated on `Tanishk756/OpenRobo` via GitHub CLI |
 | **GitHub Topics** | Remote metadata | 18 curated robotics topics added |
+
+---
+
+## Remote GitHub Actions CI Verification
+
+| CI Dimension | Job Name | Run ID | Status | Execution Details |
+| :--- | :--- | :--- | :--- | :--- |
+| **Frontend CI** | Frontend Lint, Vitest & Build | [35192703470](https://github.com/Tanishk756/OpenRobo/actions/runs/35192703470) | :white_check_mark: **PASSED** | ESLint + Vitest (6 tests) + Next.js 14 SSG build |
+| **Python CI** | Python Lint, Schema & Pytest | [35192703470](https://github.com/Tanishk756/OpenRobo/actions/runs/35192703470) | :white_check_mark: **PASSED** | Ruff + Canonical Schemas + Pytest (33 tests) |
+| **Schema CI** | Schema Validation / validate | [35112791125](https://github.com/Tanishk756/OpenRobo/actions/runs/35112791125) | :white_check_mark: **PASSED** | Draft 2020-12 canonical schema validation |
