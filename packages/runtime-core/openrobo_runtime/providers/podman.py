@@ -1,4 +1,4 @@
-"""Podman Execution Provider for rootless containerized verification."""
+﻿"""Podman Execution Provider for rootless containerized verification."""
 
 import shutil
 import subprocess
@@ -26,26 +26,30 @@ class PodmanProvider(ExecutionProvider):
                 provider_type=ExecutionProviderType.PODMAN,
                 status=ProviderStatus.UNAVAILABLE,
                 details="Podman CLI executable not found in PATH.",
+                supports_build_verification=False,
             )
         try:
             res = subprocess.run([self.podman_cmd, "--version"], capture_output=True, text=True, timeout=5)
             if res.returncode == 0:
                 return ProviderInfo(
                     provider_type=ExecutionProviderType.PODMAN,
-                    status=ProviderStatus.AVAILABLE,
+                    status=ProviderStatus.DETECTED_NOT_IMPLEMENTED,
                     version=res.stdout.strip(),
-                    details="Podman CLI is ready.",
+                    details="Podman CLI detected; container build runner integration is in development.",
+                    supports_build_verification=False,
                 )
             return ProviderInfo(
                 provider_type=ExecutionProviderType.PODMAN,
                 status=ProviderStatus.UNAVAILABLE,
                 details=res.stderr.strip(),
+                supports_build_verification=False,
             )
         except Exception as e:
             return ProviderInfo(
                 provider_type=ExecutionProviderType.PODMAN,
                 status=ProviderStatus.ERROR,
                 details=str(e),
+                supports_build_verification=False,
             )
 
     def build_workspace(
@@ -55,15 +59,8 @@ class PodmanProvider(ExecutionProvider):
         timeout_sec: int = 300,
         env_vars: Optional[Dict[str, str]] = None,
     ) -> BuildVerificationResult:
-        avail = self.detect_availability()
-        if avail.status != ProviderStatus.AVAILABLE:
-            return BuildVerificationResult(
-                status=BuildStatus.FAILED,
-                provider=ExecutionProviderType.PODMAN,
-                errors=[f"Cannot run Podman build: {avail.details}"],
-            )
         return BuildVerificationResult(
             status=BuildStatus.NOT_EXECUTED,
             provider=ExecutionProviderType.PODMAN,
-            warnings=["Podman build runner integration pending."],
+            warnings=["Podman build verification runner is pending implementation. Use Docker or Local provider."],
         )
