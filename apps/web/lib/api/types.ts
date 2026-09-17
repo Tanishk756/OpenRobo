@@ -105,3 +105,68 @@ export interface SearchResponse {
   items: SearchResultHit[];
   facets: SearchFacetDistribution;
 }
+
+export type CompatibilityStatus = 'compatible' | 'conditional' | 'incompatible' | 'unknown';
+export type EvidenceLevel = 'ci_verified' | 'vendor_tested' | 'community_reported' | 'inferred' | 'unknown';
+
+export interface EnvironmentTarget {
+  ros_version?: string;
+  os?: string;
+  os_version?: string;
+  cpu_architecture?: string;
+  capabilities?: string[];
+  hardware?: string[];
+}
+
+export interface RuleEvaluation {
+  rule_name: string;
+  status: CompatibilityStatus;
+  message: string;
+  evidence_level: EvidenceLevel;
+  remediation?: string;
+}
+
+export interface ConflictDetail {
+  source_id: string;
+  target_id?: string;
+  conflict_type: string;
+  message: string;
+  dependency_path: string[];
+  remediation?: string;
+}
+
+export interface CompatibilityResult {
+  status: CompatibilityStatus;
+  resource_ids: string[];
+  environment?: EnvironmentTarget;
+  rule_evaluations: RuleEvaluation[];
+  conflicts: ConflictDetail[];
+  warnings: string[];
+  missing_requirements: string[];
+  dependency_paths: string[][];
+  evidence_level: EvidenceLevel;
+  remediation?: string;
+  evaluated_at: string;
+}
+
+export interface ResourceCompatibilityProfile {
+  resource_id: string;
+  name: string;
+  version?: string;
+  type: string;
+  evidence_level: string;
+  direct_dependencies: string[];
+  provides: string[];
+  requires: string[];
+  tested_with: string[];
+  compatible_with: string[];
+  conflicts_with: string[];
+  platform_matrix: Record<string, string[]>;
+}
+
+export interface CompatibilityMatrixResponse {
+  candidate_ids: string[];
+  matrix: Record<string, Record<string, CompatibilityResult>>;
+  summary: Record<string, number>;
+  evaluated_at: string;
+}

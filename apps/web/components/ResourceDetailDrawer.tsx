@@ -1,35 +1,93 @@
 'use client';
 
-import React from 'react';
-import { Resource } from '../lib/api/types';
+import React, { useEffect, useState } from 'react';
+import {
+  evaluateCompatibility,
+  fetchResourceCompatibilityProfile,
+} from '../lib/api/client';
+import {
+  CompatibilityResult,
+  Resource,
+  ResourceCompatibilityProfile,
+} from '../lib/api/types';
 
 interface ResourceDetailDrawerProps {
   resource: Resource | null;
+  isOpen?: boolean;
   onClose: () => void;
 }
 
-export function ResourceDetailDrawer({ resource, onClose }: ResourceDetailDrawerProps) {
-  if (!resource) return null;
+export function ResourceDetailDrawer({
+  resource,
+  isOpen = true,
+  onClose,
+}: ResourceDetailDrawerProps) {
+  const isDrawerOpen = isOpen && Boolean(resource);
+  const [profile, setProfile] = useState<ResourceCompatibilityProfile | null>(null);
+  const [targetRos, setTargetRos] = useState<string>('Jazzy');
+  const [targetOs, setTargetOs] = useState<string>('Ubuntu');
+  const [targetArch, setTargetArch] = useState<string>('x86_64');
+  const [compatResult, setCompatResult] = useState<CompatibilityResult | null>(null);
+
+  useEffect(() => {
+    if (resource && isDrawerOpen) {
+      fetchResourceCompatibilityProfile(resource.id)
+        .then((res) => setProfile(res))
+        .catch(() => setProfile(null));
+    } else {
+      setProfile(null);
+      setCompatResult(null);
+    }
+  }, [resource, isDrawerOpen]);
+
+  useEffect(() => {
+    if (resource && isDrawerOpen) {
+      evaluateCompatibility([resource.id], {
+        ros_version: targetRos,
+        os: targetOs,
+        cpu_architecture: targetArch,
+      })
+        .then((res) => setCompatResult(res))
+        .catch(() => setCompatResult(null));
+    }
+  }, [resource, isDrawerOpen, targetRos, targetOs, targetArch]);
+
+  if (!isDrawerOpen || !resource) return null;
 
   const rosList = resource.platforms?.ros_versions || [];
   const osList = resource.platforms?.operating_systems || [];
   const archList = resource.platforms?.cpu_architectures || [];
-  const repoUrl = resource.source?.repo_url || resource.repo_url;
+  const repoUrl = resource.repo_url || resource.source?.repo_url;
   const provenance = resource.metadata_json?.provenance;
+
+  const getStatusBadgeStyle = (status?: string) => {
+    switch (status) {
+      case 'compatible':
+        return { bg: 'rgba(34, 197, 94, 0.15)', border: 'rgba(34, 197, 94, 0.4)', color: '#4ade80', icon: '?', text: 'COMPATIBLE' };
+      case 'conditional':
+        return { bg: 'rgba(234, 179, 8, 0.15)', border: 'rgba(234, 179, 8, 0.4)', color: '#facc15', icon: '?', text: 'CONDITIONAL' };
+      case 'incompatible':
+        return { bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.4)', color: '#f87171', icon: '?', text: 'INCOMPATIBLE' };
+      default:
+        return { bg: 'rgba(148, 163, 184, 0.15)', border: 'rgba(148, 163, 184, 0.4)', color: '#cbd5e1', icon: '?', text: 'UNKNOWN' };
+    }
+  };
+
+  const badgeInfo = getStatusBadgeStyle(compatResult?.status);
 
   return (
     <div
+      data-testid="detail-drawer"
       role="dialog"
       aria-modal="true"
-      aria-label="Resource Details"
-      data-testid="detail-drawer"
+      aria-label={`Details for ${resource.name}`}
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 50,
         display: 'flex',
         justifyContent: 'flex-end',
-        background: 'rgba(0, 0, 0, 0.7)',
+        background: 'rgba(5, 7, 15, 0.65)',
         backdropFilter: 'blur(4px)',
       }}
       onClick={onClose}
@@ -37,80 +95,210 @@ export function ResourceDetailDrawer({ resource, onClose }: ResourceDetailDrawer
       <div
         style={{
           width: '100%',
-          maxWidth: '620px',
-          background: 'var(--panel-bg)',
-          borderLeft: '1px solid var(--border-color)',
+          maxWidth: '680px',
           height: '100%',
-          overflowY: 'auto',
-          padding: '2rem',
+          background: 'var(--card-bg)',
+          borderLeft: '1px solid var(--border-color)',
           display: 'flex',
           flexDirection: 'column',
-          gap: '1.5rem',
-          boxShadow: '-10px 0 30px rgba(0, 0, 0, 0.5)',
+          boxShadow: '-10px 0 30px rgba(0,0,0,0.5)',
+          overflowY: 'auto',
+          padding: '1.75rem',
+          gap: '1.25rem',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
               <span className="badge badge-type">{resource.type}</span>
               {resource.version && (
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--accent-cyan)', fontFamily: 'var(--font-mono)' }}>
                   v{resource.version}
                 </span>
               )}
             </div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--text-main)' }}>{resource.name}</h2>
-            <code style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{resource.id}</code>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700, color: '#f8fafc', marginTop: '0.4rem', fontFamily: 'var(--font-heading)' }}>
+              {resource.name}
+            </h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', marginTop: '0.1rem' }}>
+              {resource.id}
+            </p>
           </div>
           <button
-            onClick={onClose}
-            aria-label="Close drawer"
             data-testid="close-drawer"
+            onClick={onClose}
+            aria-label="Close details"
             style={{
               background: 'transparent',
               border: '1px solid var(--border-color)',
               color: 'var(--text-dim)',
+              borderRadius: '6px',
+              padding: '0.4rem 0.75rem',
               cursor: 'pointer',
-              padding: '0.4rem 0.7rem',
-              borderRadius: '4px',
               fontSize: '1rem',
             }}
           >
-            ✕
+            ?
           </button>
         </div>
 
-        {/* Overview */}
-        <section>
-          <h3 style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
-            Overview
-          </h3>
-          <p style={{ color: 'var(--text-main)', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '0.75rem' }}>
-            {resource.summary || 'No summary available.'}
-          </p>
-          {resource.description && resource.description !== resource.summary && (
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5' }}>
-              {resource.description}
-            </p>
+        {/* Compatibility Reasoning Layer */}
+        <section data-testid="compatibility-section" style={{ background: '#0a0f1d', border: '1px solid #1e293b', borderRadius: '8px', padding: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <h3 style={{ fontSize: '0.9rem', color: '#67e8f9', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Compatibility Intelligence
+            </h3>
+            <span
+              data-testid="compatibility-badge"
+              style={{
+                background: badgeInfo.bg,
+                border: `1px solid ${badgeInfo.border}`,
+                color: badgeInfo.color,
+                padding: '0.2rem 0.6rem',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+              }}
+            >
+              <span>{badgeInfo.icon}</span>
+              <span>{badgeInfo.text}</span>
+            </span>
+          </div>
+
+          {/* Target Environment Evaluator Form */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>Target ROS</label>
+              <select
+                value={targetRos}
+                onChange={(e) => setTargetRos(e.target.value)}
+                style={{ width: '100%', background: '#05070f', border: '1px solid #334155', color: '#f8fafc', padding: '0.35rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem' }}
+              >
+                <option value="Jazzy">ROS 2 Jazzy</option>
+                <option value="Humble">ROS 2 Humble</option>
+                <option value="Iron">ROS 2 Iron</option>
+                <option value="Rolling">ROS 2 Rolling</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>Target OS</label>
+              <select
+                value={targetOs}
+                onChange={(e) => setTargetOs(e.target.value)}
+                style={{ width: '100%', background: '#05070f', border: '1px solid #334155', color: '#f8fafc', padding: '0.35rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem' }}
+              >
+                <option value="Ubuntu">Ubuntu Linux</option>
+                <option value="Windows">Windows</option>
+                <option value="macOS">macOS</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>CPU Arch</label>
+              <select
+                value={targetArch}
+                onChange={(e) => setTargetArch(e.target.value)}
+                style={{ width: '100%', background: '#05070f', border: '1px solid #334155', color: '#f8fafc', padding: '0.35rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem' }}
+              >
+                <option value="x86_64">x86_64 (AMD64)</option>
+                <option value="aarch64">aarch64 (ARM64)</option>
+                <option value="armv7l">armv7l</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Live Evaluation Diagnostics */}
+          {compatResult && compatResult.conflicts && compatResult.conflicts.length > 0 && (
+            <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '6px', padding: '0.65rem 0.75rem', marginBottom: '0.75rem' }}>
+              <h4 style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 600, marginBottom: '0.25rem' }}>
+                Conflict Diagnostics ({compatResult.conflicts.length})
+              </h4>
+              {compatResult.conflicts.map((conf, idx) => (
+                <div key={idx} style={{ fontSize: '0.75rem', color: '#fca5a5', marginTop: '0.25rem' }}>
+                  ? {conf.message}
+                  {conf.remediation && (
+                    <div style={{ color: '#93c5fd', fontSize: '0.7rem', marginTop: '0.15rem', paddingLeft: '0.75rem' }}>
+                      ? Suggestion: {conf.remediation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Graph Relationships & Evidence */}
+          {profile && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', fontSize: '0.75rem' }}>
+              <div style={{ background: '#05070f', padding: '0.5rem', borderRadius: '4px', border: '1px solid #1e293b' }}>
+                <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>Tested With</span>
+                <span style={{ color: '#67e8f9', fontFamily: 'var(--font-mono)' }}>
+                  {profile.tested_with?.length ? profile.tested_with.join(', ') : 'None documented'}
+                </span>
+              </div>
+              <div style={{ background: '#05070f', padding: '0.5rem', borderRadius: '4px', border: '1px solid #1e293b' }}>
+                <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>Compatible With</span>
+                <span style={{ color: '#4ade80', fontFamily: 'var(--font-mono)' }}>
+                  {profile.compatible_with?.length ? profile.compatible_with.join(', ') : 'None documented'}
+                </span>
+              </div>
+              <div style={{ background: '#05070f', padding: '0.5rem', borderRadius: '4px', border: '1px solid #1e293b' }}>
+                <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>Direct Dependencies</span>
+                <span style={{ color: '#93c5fd', fontFamily: 'var(--font-mono)' }}>
+                  {profile.direct_dependencies?.length ? profile.direct_dependencies.join(', ') : 'None (Independent)'}
+                </span>
+              </div>
+              <div style={{ background: '#05070f', padding: '0.5rem', borderRadius: '4px', border: '1px solid #1e293b' }}>
+                <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '0.2rem' }}>Known Conflicts</span>
+                <span style={{ color: profile.conflicts_with?.length ? '#f87171' : 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                  {profile.conflicts_with?.length ? profile.conflicts_with.join(', ') : 'None known'}
+                </span>
+              </div>
+            </div>
           )}
         </section>
 
-        {/* Source Repository */}
+        {/* Description & Summary */}
+        <section>
+          <h3 style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+            Description
+          </h3>
+          <p style={{ fontSize: '0.9rem', lineHeight: '1.6', color: 'var(--text-main)' }}>
+            {resource.description || resource.summary || 'No detailed description available.'}
+          </p>
+        </section>
+
+        {/* Repository Link */}
         {repoUrl && (
-          <section style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '1rem' }}>
-            <h3 style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.35rem' }}>
-              Upstream Source
+          <section>
+            <h3 style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>
+              Source Repository
             </h3>
             <a
               href={repoUrl}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: 'var(--accent-cyan)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.85rem',
+                textDecoration: 'none',
+                background: 'var(--bg-color)',
+                border: '1px solid var(--border-color)',
+                padding: '0.5rem 0.75rem',
+                borderRadius: '6px',
+                wordBreak: 'break-all',
+              }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
               </svg>
               <span>{repoUrl}</span>
             </a>
@@ -235,7 +423,7 @@ export function ResourceDetailDrawer({ resource, onClose }: ResourceDetailDrawer
           </div>
           <div>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Evidence Level: </span>
-            <span className="badge badge-evidence">🔒 {resource.evidence_level?.replace('_', ' ')}</span>
+            <span className="badge badge-evidence">??? {resource.evidence_level?.replace('_', ' ')}</span>
           </div>
         </section>
 

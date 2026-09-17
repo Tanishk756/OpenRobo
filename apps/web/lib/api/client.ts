@@ -1,5 +1,9 @@
 import {
+  CompatibilityMatrixResponse,
+  CompatibilityResult,
+  EnvironmentTarget,
   Resource,
+  ResourceCompatibilityProfile,
   ResourceListResult,
   ResourceQueryParams,
   SearchFacetDistribution,
@@ -95,7 +99,6 @@ export async function fetchSearchFacets(q?: string): Promise<SearchFacetDistribu
 }
 
 export async function fetchResources(params: ResourceQueryParams = {}): Promise<ResourceListResult> {
-  // Use searchResources under the hood for unified search, faceting, and filtering
   try {
     const searchRes = await searchResources(params);
     return {
@@ -137,5 +140,93 @@ export async function fetchResourceById(resourceId: string): Promise<Resource> {
       undefined,
       true
     );
+  }
+}
+
+export async function fetchResourceCompatibilityProfile(
+  resourceId: string
+): Promise<ResourceCompatibilityProfile> {
+  const encodedId = encodeURIComponent(resourceId);
+  const url = `${API_BASE_URL}/api/v1/compatibility/resource/${encodedId}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      throw new ApiError(`Failed to fetch compatibility profile: HTTP ${res.status}`, res.status);
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(`Unable to evaluate compatibility profile for '${resourceId}'.`, undefined, true);
+  }
+}
+
+export async function evaluateCompatibility(
+  resourceIds: string[],
+  environment?: EnvironmentTarget
+): Promise<CompatibilityResult> {
+  const url = `${API_BASE_URL}/api/v1/compatibility/evaluate`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        resource_ids: resourceIds,
+        environment,
+      }),
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      throw new ApiError(`Compatibility evaluation failed: HTTP ${res.status}`, res.status);
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to evaluate compatibility stack.', undefined, true);
+  }
+}
+
+export async function fetchCompatibilityMatrix(
+  resourceIds: string[],
+  environment?: EnvironmentTarget
+): Promise<CompatibilityMatrixResponse> {
+  const url = `${API_BASE_URL}/api/v1/compatibility/matrix`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        resource_ids: resourceIds,
+        environment,
+      }),
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      throw new ApiError(`Failed to fetch compatibility matrix: HTTP ${res.status}`, res.status);
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to fetch compatibility matrix.', undefined, true);
   }
 }

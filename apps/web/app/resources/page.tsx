@@ -262,6 +262,7 @@ function ResourcesExplorerContent() {
       {/* Detail Drawer */}
       <ResourceDetailDrawer
         resource={selectedResource}
+        isOpen={Boolean(selectedResource)}
         onClose={() => setSelectedResource(null)}
       />
     </div>
