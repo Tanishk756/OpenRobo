@@ -1,4 +1,4 @@
-export interface SourceDetail {
+﻿export interface SourceDetail {
   repo_url: string;
   vcs_type?: string;
   branch?: string;
@@ -291,6 +291,25 @@ export interface FileTreeNode {
   children?: Record<string, FileTreeNode>;
 }
 
+export interface WorkspaceReadinessReport {
+  overall_state: string;
+  static_validation: string;
+  docker_build: string;
+  colcon_build: string;
+  runtime_validation: string;
+  manual_steps_required: string[];
+  evidence_summary: Record<string, string>;
+  notes: string[];
+}
+
+export interface WorkspaceValidationResult {
+  is_valid: boolean;
+  status: string;
+  checks_count: number;
+  errors: string[];
+  warnings: string[];
+}
+
 export interface WorkspacePreviewResponse {
   status: string;
   stack_id: string;
@@ -309,6 +328,8 @@ export interface WorkspacePreviewResponse {
   selected_adapters: string[];
   generator_version: string;
   generated_at: string;
+  readiness_report?: WorkspaceReadinessReport;
+  validation_result?: WorkspaceValidationResult;
 }
 
 export interface WorkspaceRequest {

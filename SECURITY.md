@@ -11,18 +11,27 @@ Only the latest release and the current active development branch (`main`) recei
 | Version / Branch | Supported          |
 | ---------------- | ------------------ |
 | `main`           | :white_check_mark: |
-| `< 0.2.0`        | :x:                |
+| `0.5.x`          | :white_check_mark: |
+| `< 0.5.0`        | :x:                |
 
 ---
 
-## Ingestion & Static Analysis Threat Model
+## Security Model & Hardening Safeguards
 
-OpenRobo performs automated static metadata extraction on third-party and public robotics repositories. To ensure the safety of developer workstations and server environments, OpenRobo enforces the following threat boundaries:
+OpenRobo enforces strict security controls across both metadata ingestion and workspace synthesis:
 
-1. **Zero Untrusted Code Execution**: OpenRobo static ingestion inspecting `package.xml`, `CMakeLists.txt`, and repository manifests **never executes** upstream Python or C++ scripts, setup scripts, or binaries.
-2. **Safe XML/Manifest Parsing**: All XML parsing utilizes defused/hardened parsers resistant to XML Entity Expansion (Billion Laughs) and External Entity (XXE) resolution attacks.
-3. **SSRF & Network Isolation**: Network requests made by ingestion adapters are restricted to whitelisted public VCS APIs (e.g. GitHub REST/raw content APIs).
-4. **Credential Isolation**: OpenRobo tools do not persist, log, or transmit personal API keys or cloud tokens.
+### 1. Ingestion & Static Analysis Threat Model
+- **Zero Untrusted Code Execution**: Static repository ingestion inspecting `package.xml`, `CMakeLists.txt`, and repository manifests **never executes** upstream Python or C++ scripts, setup scripts, or binaries.
+- **Safe XML/Manifest Parsing**: All XML parsing utilizes hardened parsers resistant to XML Entity Expansion (Billion Laughs) and External Entity (XXE) resolution attacks.
+- **SSRF & Network Isolation**: Network requests made by ingestion adapters are restricted to approved VCS APIs (e.g. GitHub REST/raw content APIs).
+- **Credential Isolation**: OpenRobo tools do not persist, log, or transmit personal API keys or cloud tokens.
+
+### 2. Workspace Generator & Deployment Hardening (Milestone 5.1)
+- **Least-Privilege Docker Profiles**: Generated Docker Compose configurations do NOT enable `privileged: true` or mount unrestricted `/dev:/dev` by default. Container profiles default to least privilege and require explicit device passthrough (e.g. `/dev/ttyUSB0`) only when configured.
+- **Shell & PowerShell Command Injection Defenses**: All generated provisioning scripts (`install_dependencies.sh`, `rosdep-install.sh`, `install_dependencies.ps1`) strictly validate Debian/APT package names and Python pip requirements against canonical regexes, rejecting newline injections, command separators (`;`, `&&`, `|`), subshell executions (`` ` ``, `$()`), and arbitrary URLs. Safe quoting (`shlex.quote`) is universally enforced.
+- **XML & YAML Safe Serialization**: User-controlled inputs (stack names, descriptions, maintainer details) are XML-escaped via `xml.sax.saxutils.escape` before inclusion in `package.xml`, and YAML configs are serialized using `yaml.safe_dump` rather than raw string concatenation.
+- **Path Traversal & Archive Extraction Defenses**: Generated relative file paths and ZIP archive entries reject directory traversal (`..`, `../`), Windows drive letters (`C:`), Windows reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`), and null bytes.
+- **Evidence-Backed Generation**: Every generated component parameter and launch snippet is tagged with an explicit confidence level (`VERIFIED_ADAPTER`, `USER_CONFIGURED`, `METADATA_DRIVEN`, or `GENERIC_SCAFFOLD`). The generator never invents hardware dimensions or joint mappings without user input.
 
 ---
 

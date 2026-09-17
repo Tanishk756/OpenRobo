@@ -11,46 +11,62 @@ from openrobo_workspace.models import GeneratedFile, WorkspaceGenerationPlan
 
 def generate_parameter_files(plan: WorkspaceGenerationPlan) -> List[GeneratedFile]:
     files: List[GeneratedFile] = []
-    component_ids = {c.resource_id.lower() for c in plan.components}
     pkg_name = plan.bringup_package_name
+    user_cfg = plan.user_configuration or {}
+    active_adapter_ids = {c.adapter_name for c in plan.components if c.has_adapter and c.adapter_name}
 
-    if any("nav2" in cid or "navigation2" in cid for cid in component_ids):
-        nav2_f = get_nav2_params_file()
+    if "nav2" in active_adapter_ids:
+        nav2_user = user_cfg.get("nav2") or {
+            "frames": user_cfg.get("frames"),
+            "topics": user_cfg.get("topics"),
+        }
+        nav2_f = get_nav2_params_file(user_config=nav2_user)
         nav2_f.path = f"src/{pkg_name}/config/nav2_params.yaml"
         files.append(nav2_f)
 
-    if any("slam_toolbox" in cid or "slam-toolbox" in cid for cid in component_ids):
-        slam_f = get_slam_toolbox_params_file()
+    if "slam_toolbox" in active_adapter_ids:
+        slam_user = user_cfg.get("slam_toolbox") or {
+            "frames": user_cfg.get("frames"),
+            "topics": user_cfg.get("topics"),
+        }
+        slam_f = get_slam_toolbox_params_file(user_config=slam_user)
         slam_f.path = f"src/{pkg_name}/config/slam_toolbox_params.yaml"
         files.append(slam_f)
 
-    if any("ros2_control" in cid or "joint_state_broadcaster" in cid for cid in component_ids):
-        ctrl_f = get_ros2_control_params_file()
-        ctrl_f.path = f"src/{pkg_name}/config/ros2_control_params.yaml"
+    if "ros2_control" in active_adapter_ids:
+        ctrl_user = user_cfg.get("ros2_control")
+        ctrl_f = get_ros2_control_params_file(user_config=ctrl_user)
+        # If user config is absent, path becomes .yaml.example
+        if ctrl_user:
+            ctrl_f.path = f"src/{pkg_name}/config/ros2_control_params.yaml"
+        else:
+            ctrl_f.path = f"src/{pkg_name}/config/ros2_control_params.yaml.example"
         files.append(ctrl_f)
 
-    if any("gazebo" in cid or "gz_sim" in cid or "ros_gz" in cid for cid in component_ids):
-        gz_f = get_gazebo_params_file()
+    if "gazebo" in active_adapter_ids:
+        gz_user = user_cfg.get("gazebo")
+        gz_f = get_gazebo_params_file(user_config=gz_user)
         gz_f.path = f"src/{pkg_name}/config/gazebo_bridge.yaml"
         files.append(gz_f)
 
-    # For generic components without a specialized adapter, generate a clean example template
+    # For generic components without a specialized adapter, generate clean scaffold example template
     for c in plan.components:
-        cid = c.resource_id.lower()
-        if not ("nav2" in cid or "slam_toolbox" in cid or "ros2_control" in cid or "gazebo" in cid or "gz_sim" in cid or "ros_gz" in cid):
-            pkg_token = c.resource_id.split("/")[-1].replace("-", "_")
-            example_yaml = f"""# Parameter template for {c.name} ({c.resource_id})
-# Add custom node parameters below following standard ROS 2 parameter structure:
+        if not c.has_adapter or not c.adapter_name:
+            pkg_token = c.resource_id.split("/")[-1].replace("-", "_").lower()
+            example_yaml = f"""# ==============================================================================
+# Generic Configuration Scaffold Example for {c.name} ({c.resource_id})
+# Evidence Level: GENERIC_SCAFFOLD (Manual configuration required)
+# ==============================================================================
 {pkg_token}_node:
   ros__parameters:
     use_sim_time: True
-    # custom_parameter_example: 1.0
+    # TODO: Add robot-specific node parameters here
 """
             files.append(
                 GeneratedFile(
                     path=f"src/{pkg_name}/config/{pkg_token}.yaml.example",
                     content=example_yaml,
-                    description=f"Configuration template example for {c.name}",
+                    description=f"Configuration scaffold example for {c.name}",
                 )
             )
 

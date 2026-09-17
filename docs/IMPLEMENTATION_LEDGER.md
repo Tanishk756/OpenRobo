@@ -1,16 +1,16 @@
-# OpenRobo Implementation Ledger
+﻿# OpenRobo Implementation Ledger
 
-This document tracks all functional requirements across OpenRobo milestones, recording verification evidence, test coverage, and known limitations.
+This ledger is the single source of truth for architectural requirements, validation evidence, known limitations, and next actions across all milestones of the OpenRobo platform.
 
 ---
 
-## Milestone 0 — Foundation & Repository Architecture
+## Milestone 0 — Foundation & Repository Baseline
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|---|
-| **REQ-M0-01** | Canonical JSON Schemas | `VERIFIED` | Draft 2020-12 schemas for resource, graph, stack | `scripts/validate_schemas.py` | `schemas/*.json` | None | Maintain schema evolution ADRs |
-| **REQ-M0-02** | Monorepo Structure & Tooling | `VERIFIED` | pnpm workspace + Python editable packages | `pnpm run check` | Root configs | None | Standardized cross-platform scripts |
-| **REQ-M0-03** | Zero-Extra-Infrastructure Core | `VERIFIED` | FastAPI + PostgreSQL + Next.js 14 stack | Monorepo test suite | `apps/` & `packages/` | None | Ongoing maintenance |
+| **REQ-M0-01** | Canonical Schemas | `VERIFIED` | Draft 2020-12 JSON Schemas for resources, graphs, stacks | `scripts/validate_schemas.py` | `schemas/*.schema.json` | None | Maintain backward compatibility |
+| **REQ-M0-02** | Python Schema Package | `VERIFIED` | `openrobo-schemas` validation package with `jsonschema` | `tests/` in package | `packages/schemas-py/` | None | Monorepo standard |
+| **REQ-M0-03** | Monorepo Architecture | `VERIFIED` | pnpm workspace + Python virtual env | Root CI workflows | `pnpm-workspace.yaml`, `pyproject.toml` | None | Green baseline |
 
 ---
 
@@ -18,7 +18,7 @@ This document tracks all functional requirements across OpenRobo milestones, rec
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|---|
-| **REQ-M1-01** | Resource Registry API | `VERIFIED` | Async CRUD, pagination, filtering, SQLAlchemy models | `apps/api/tests/test_resources.py` | `apps/api/routers/resources.py` | Seed dataset limited to 20 initial items | Ingest real-world packages in future milestones |
+| **REQ-M1-01** | Resource Registry API | `VERIFIED` | Async CRUD, pagination, filtering, SQLAlchemy models | `apps/api/tests/test_resources.py` | `apps/api/routers/resources.py` | Seed dataset limited to initial items | Ingest real-world packages |
 | **REQ-M1-02** | Resource Explorer UI | `VERIFIED` | High-density dark mode UI with drawers & badges | `apps/web/tests/unit/resources.test.tsx` | `apps/web/app/resources/` | Client-side search for basic filters | Deep search integrated in M2 |
 | **REQ-M1-03** | Static Repository Ingestion | `VERIFIED` | Safe non-executing GitHub package.xml parser | `apps/api/tests/test_ingestion.py` | `apps/api/services/ingestion/` | Unauthenticated rate limit 60 req/hr | Optional token support |
 
@@ -58,9 +58,9 @@ This document tracks all functional requirements across OpenRobo milestones, rec
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|---|
-| **REQ-M5-01** | Colcon Workspace & Bringup Synthesis | `VERIFIED` | Deterministic synthesis of REP-149 package.xml, CMakeLists.txt, AST-validated launch.py, and parameter YAMLs | `packages/workspace-gen/tests/test_generator.py` | `packages/workspace-gen/` | Generic components receive commented `.example` templates | Add more verified adapters in M6+ |
+| **REQ-M5-01** | Colcon Workspace & Bringup Synthesis | `VERIFIED` | Deterministic synthesis of REP-149 package.xml, CMakeLists.txt, AST-validated launch.py, and parameter YAMLs | `packages/workspace-gen/tests/test_generator.py` | `packages/workspace-gen/` | Basic adapter matching replaced in M5.1 | Hardened in M5.1 |
 | **REQ-M5-02** | Containerization & Dev Containers | `VERIFIED` | Multi-stage Dockerfiles mapped to ROS distros, Docker Compose services, VS Code Dev Container definitions | `packages/workspace-gen/tests/test_generator.py` | `packages/workspace-gen/generators/` | Real Docker build execution requires active host daemon | Provide automated CI container smoke test |
-| **REQ-M5-03** | Cryptographic Lockfile & Determinism | `VERIFIED` | `openrobo.lock.json` with SHA-256 digests, component revisions, normalized ZIP timestamps | `packages/workspace-gen/tests/test_generator.py` | `packages/workspace-gen/lockfile.py` | Unreleased packages marked with UNKNOWN revision | Git commit hash extraction |
+| **REQ-M5-03** | Cryptographic Lockfile & Determinism | `VERIFIED` | `openrobo.lock.json` with SHA-256 digests, component revisions, normalized ZIP timestamps | `packages/workspace-gen/tests/test_generator.py` | `packages/workspace-gen/lockfile.py` | Magic string "UNKNOWN" replaced in M5.1 | Structured lockfile in M5.1 |
 | **REQ-M5-04** | Path Traversal & Security Hardening | `VERIFIED` | Strict relative path sanitizer blocking `..`, drive letters, device names, control chars | `packages/workspace-gen/tests/test_security.py` | `packages/workspace-gen/filesystem.py` | None | Monorepo standard |
 | **REQ-M5-05** | Workspace API & ZIP Download | `VERIFIED` | REST endpoints for preview, generate, and streaming ZIP downloads | `apps/api/tests/test_workspace_api.py` | `apps/api/routers/workspace.py` | Memory-bounded streaming | Direct cloud bucket upload |
 | **REQ-M5-06** | CLI Workspace Commands | `VERIFIED` | `openrobo workspace preview/generate/archive` with Rich diagnostic tree | `packages/cli/tests/test_cli.py` | `packages/cli/openrobo_cli/workspace.py` | None | Complete |
@@ -68,33 +68,24 @@ This document tracks all functional requirements across OpenRobo milestones, rec
 
 ---
 
+## Milestone 5.1 — Generator Trust, Safety & Deployment Hardening
+
+| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
+|---|---|---|---|---|---|---|---|
+| **REQ-M5.1-01** | Evidence & Confidence Model | `VERIFIED` | Structured `ComponentEvidence` levels (`VERIFIED_ADAPTER`, `USER_CONFIGURED`, `METADATA_DRIVEN`, `GENERIC_SCAFFOLD`) | `packages/workspace-gen/tests/test_generator.py` | `openrobo_workspace/models.py`, `planner.py` | None | Standard evidence model |
+| **REQ-M5.1-02** | Deterministic Adapter Registry | `VERIFIED` | Removed substring matching; exact canonical ID matching for Nav2, SLAM, ros2_control, Gazebo | `packages/workspace-gen/tests/test_generator.py` | `openrobo_workspace/adapters/registry.py` | None | Immunity to false positive IDs |
+| **REQ-M5.1-03** | ros2_control Safety & Geometry | `VERIFIED` | Removed guessed wheel/joint geometry; emits `.example` with required manual steps unless user-configured | `packages/workspace-gen/tests/test_generator.py` | `openrobo_workspace/adapters/ros2_control.py` | Requires user URDF joint names | Documented in README & lockfile |
+| **REQ-M5.1-04** | Nav2 / SLAM / Gazebo Hardening | `VERIFIED` | Separated safe framework defaults from platform specifics; supported user frame/topic overrides | `packages/workspace-gen/tests/test_generator.py` | `openrobo_workspace/adapters/` | None | Complete |
+| **REQ-M5.1-05** | package.xml & Escaping Safety | `VERIFIED` | `<exec_depend>` only for valid ROS package names; XML escaping and maintainer metadata resolution | `packages/workspace-gen/tests/test_generator.py` | `openrobo_workspace/generators/package_xml.py` | None | REP-149 compliant |
+| **REQ-M5.1-06** | Docker Least-Privilege | `VERIFIED` | Removed default `privileged: true` and `/dev:/dev` mounts; explicit device passthrough | `packages/workspace-gen/tests/test_generator.py` | `openrobo_workspace/generators/compose.py` | Simulation profile optional | Complete |
+| **REQ-M5.1-07** | Shell Injection Hardening | `VERIFIED` | Debian & pip regex validation, `shlex.quote`, rejection of control chars and subshells | `packages/workspace-gen/tests/test_security.py` | `openrobo_workspace/generators/rosdep.py` | None | Fully hardened |
+| **REQ-M5.1-08** | Workspace Readiness & Static Validator | `VERIFIED` | Formal `WorkspaceValidator` (AST, XML, YAML, JSON); explicit readiness states in API, CLI, and Web UI | `packages/workspace-gen/tests/test_generator.py` | `openrobo_workspace/validator.py`, `models.py` | Real Docker build not executed in generator | Distinguishes static from runtime |
+
+---
+
 ## Milestone 6 — Simulation & Runtime Integration
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|---|
-| **REQ-M6-01** | Simulator Adapter Interface | `PLANNED` | Adapter interfaces for Gazebo, Webots, MuJoCo | Adapter unit tests | Pending | Scaffolding generated in M5 | Implement runtime simulator bridge |
+| **REQ-M6-01** | Simulator Adapter Interface | `PLANNED` | Adapter interfaces for Gazebo, Webots, MuJoCo | Adapter unit tests | Pending | Scaffolding generated in M5.1 | Implement runtime simulator bridge |
 | **REQ-M6-02** | ROS Graph Introspection & Health | `PLANNED` | Runtime node/topic health monitoring and rosbag telemetry | Introspection tests | Pending | Requires live ROS runtime | Implement runtime client |
-
----
-
-## Milestone 7 — Community & Governance
-
-| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|---|
-| **REQ-M7-01** | Community Submission & Moderation | `PLANNED` | Community submission pull-request & verification system | Workflow tests | Pending | Automated anti-spam safeguards needed | Design submission portal |
-
----
-
-## Milestone 8 — AI Abstraction Layer & pgvector
-
-| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|---|
-| **REQ-M8-01** | Model Agnostic AI Provider Interface | `PLANNED` | Unified API for Local LLMs (Ollama) & Hosted LLMs with pgvector RAG | Provider unit tests | Pending | Optional feature only | Implement `AIProvider` base class & pgvector |
-
----
-
-## Milestone 9 — Production Hardening & Observability
-
-| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
-|---|---|---|---|---|---|---|---|
-| **REQ-M9-01** | Security Hardening & Observability | `PLANNED` | Rate limiting, SSRF guardrails, Prometheus metrics | Security & load tests | Pending | Infrastructure production setup | Implement security middleware |
