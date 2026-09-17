@@ -12,10 +12,16 @@ from openrobo_compat.models import (
     EvaluationRequest,
     EvidenceLevel,
     MatrixRequest,
+    ProposedComponentAction,
+    ResolutionActionType,
+    ResolutionProposal,
     ResourceCandidate,
     ResourceCompatibilityProfile,
     RuleEvaluation,
+    StackComponentSpec,
+    StackValidationResponse,
 )
+from openrobo_compat.resolver import DependencyResolver
 from openrobo_compat.rules import (
     BaseRule,
     CpuArchitectureRule,
@@ -32,6 +38,7 @@ from openrobo_compat.semver import matches_version_constraint, parse_semver_cons
 __all__ = [
     "CompatibilityEngine",
     "CompatibilityExplainer",
+    "DependencyResolver",
     "OpenRoboGraph",
     "GraphEdgeData",
     "CompatibilityStatus",
@@ -45,6 +52,11 @@ __all__ = [
     "EvaluationRequest",
     "MatrixRequest",
     "ResourceCompatibilityProfile",
+    "ResolutionActionType",
+    "ProposedComponentAction",
+    "ResolutionProposal",
+    "StackComponentSpec",
+    "StackValidationResponse",
     "BaseRule",
     "RosDistributionRule",
     "OperatingSystemRule",
