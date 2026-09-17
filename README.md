@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # OpenRobo
 
@@ -21,11 +21,11 @@
 
 Robotics software engineering is fragmented across hundreds of isolated repositories, disparate ROS packages, custom sensor drivers, and fragile dependency chains. Integrating a robot stack—from LiDAR SLAM and arm kinematics to hardware interfaces and simulation—often requires hours of manual dependency debugging.
 
-**OpenRobo** provides a standardized, vendor-neutral software registry and intelligent reasoning platform for modern robotics:
+**OpenRobo** provides a standardized, vendor-neutral software registry, intelligent compatibility engine, stack builder, and automated workspace synthesis platform for modern robotics:
 - **Discover Components**: Search thousands of ROS 2 packages, hardware drivers, simulation models, and algorithms with weighted full-text and fuzzy typo-tolerant indexing.
 - **Understand Compatibility**: Graph-based constraint validation mapping cross-package compatibility across ROS distributions, CPU architectures, and OS kernels.
-- **Build Robot Stacks**: Compose modular robotics architectures with interactive dependency checking (*upcoming in M4*).
-- **Generate Workspaces**: Export reproducible Dockerfiles, Dev Containers, and Colcon overlay workspaces (*upcoming in M5*).
+- **Build Robot Stacks**: Compose modular robotics architectures with interactive dependency checking and one-click conflict resolution (`/stack-builder`).
+- **Generate Workspaces**: Synthesize deterministic, reproducible Colcon workspaces, REP-149 bringup meta-packages, AST-validated launch scripts, multi-stage Dockerfiles, Dev Containers, and lockfiles (`openrobo.lock.json`).
 
 ---
 
@@ -34,9 +34,12 @@ Robotics software engineering is fragmented across hundreds of isolated reposito
 - [x] **Canonical Robotics Schemas**: JSON Schema (Draft 2020-12) standards for resource manifests (`resource.schema.json`), compatibility graphs (`graph.schema.json`), and robot stacks (`stack.schema.json`).
 - [x] **Knowledge Graph & Compatibility Intelligence**: Deterministic reasoning layer evaluating ROS 2 distributions (Humble, Jazzy, Iron, Rolling), OS, CPU architecture (x86_64, aarch64), SemVer constraints, required hardware/capabilities, cycle detection, and conflict propagation with sub-50ms matrix performance.
 - [x] **Zero-Extra-Infrastructure Search Engine**: PostgreSQL-backed weighted full-text search (`tsvector`, GIN indexes) with `pg_trgm` fuzzy similarity matching and multi-taxonomy faceting.
-- [x] **Resource Explorer Web App**: Dark-mode, high-density Next.js 14 web interface featuring dynamic facet counts, search highlight rendering, platform matrix badges, and shareable URL query state (`/resources?q=nav2&domain=navigation`).
+- [x] **Interactive Robotics Stack Builder**: Visual 3-panel stack composition studio (`/stack-builder`) with real-time constraint evaluation, starter templates, dependency auto-resolution proposals, and manifest import/export.
+- [x] **Deterministic Workspace & Deployment Generator (Milestone 5)**: Synthesizes fully functional ROS 2 colcon workspaces, launch pipelines, parameter configurations, multi-stage Dockerfiles, Docker Compose definitions, VS Code Dev Containers, setup scripts, and byte-reproducible ZIP bundles.
+- [x] **Verified Hardware & Framework Adapters**: Explicit synthesis adapters for Nav2 navigation pipelines, SLAM Toolbox 2D mapping, ros2_control controller managers, and Gazebo simulation bridges.
+- [x] **Reproducible Lockfiles & Provenance**: Generates cryptographic lockfiles (`openrobo.lock.json`) capturing component digests, repository URLs, build types, and upstream licenses.
 - [x] **Static Robotics Repository Ingestion**: Safe, non-executing static analysis of GitHub repositories extracting ROS `package.xml` manifests, dependencies, maintainers, and licenses with full provenance tracking.
-- [x] **Unified CLI**: Typer/Rich command-line suite for schema validation, static GitHub ingestion, and ranked registry search.
+- [x] **Unified CLI**: Typer/Rich command-line suite for schema validation, static GitHub ingestion, ranked registry search, and workspace preview/generation/archive (`openrobo workspace`).
 - [x] **Cross-Platform Compatibility**: Full first-class support for Linux, macOS, and Windows development workflows.
 
 ---
@@ -48,7 +51,7 @@ OpenRobo is structured as a zero-extra-infrastructure monorepo managed with **pn
 ```mermaid
 graph TD
     subgraph Frontend ["Frontend Layer (apps/web)"]
-        UI["Next.js 14 App Router<br/>(Resource Explorer, Search, Drawers)"]
+        UI["Next.js 14 App Router<br/>(Resource Explorer, Stack Builder, Workspace Preview)"]
         ApiClient["Typed API Client<br/>(FastAPI Bridge)"]
         UI --> ApiClient
     end
@@ -57,13 +60,16 @@ graph TD
         FastAPI["FastAPI REST Engine"]
         SearchService["Search Subsystem<br/>(QueryBuilder, Ranking, Facets)"]
         IngestionService["GitHub Static Ingestion<br/>(Safe XML Parsing, Lineage)"]
+        StackRouter["Stack & Workspace Routers<br/>(Validation, Generation, Download)"]
         FastAPI --> SearchService
         FastAPI --> IngestionService
+        FastAPI --> StackRouter
     end
 
     subgraph CorePackages ["Core Engine Packages (packages/)"]
         SchemasPkg["packages/schemas<br/>(Pydantic Models, Schema Validators)"]
         CompatPkg["packages/compat-engine<br/>(Graph Engine, Constraint Rules)"]
+        WorkspacePkg["packages/workspace-gen<br/>(Colcon, Launch AST, Docker, DevContainer)"]
         CLIPkg["packages/cli<br/>(openrobo CLI)"]
     end
 
@@ -74,158 +80,87 @@ graph TD
 
     ApiClient --> FastAPI
     CLIPkg --> SchemasPkg
+    CLIPkg --> WorkspacePkg
     CLIPkg --> SearchService
+    StackRouter --> WorkspacePkg
     SearchService --> Postgres
     SearchService -.-> SQLiteTest
     FastAPI --> SchemasPkg
-    FastAPI --> CompatPkg
-```
-
-### Monorepo Structure
-
-```
-OpenRobo/
-├── apps/
-│   ├── api/                   # FastAPI backend, PostgreSQL models, search & ingestion
-│   └── web/                   # Next.js 14 Resource Explorer frontend
-├── packages/
-│   ├── schemas/               # Python schema bindings and validator package
-│   ├── compat-engine/         # Graph-based compatibility and constraint reasoning
-│   └── cli/                   # Typer & Rich interactive CLI (openrobo)
-├── schemas/                   # Canonical JSON Schemas (Draft 2020-12)
-├── samples/                   # Sample manifests & seed robotics datasets
-├── scripts/                   # Automated schema validation and database seeding
-└── docs/                      # Architectural Decision Records (ADRs) and Milestone specs
 ```
 
 ---
 
-## Quick Start
+## Quickstart
 
-### Prerequisites
-- **Node.js**: `v18+`, `v20+`, or `v24+`
-- **pnpm**: `v12+` (or `v8+`/`v9+`)
-- **Python**: `3.10`, `3.11`, or `3.12`
+### 1. Prerequisites
 
-### 1. Install Dependencies
+- Python 3.10+
+- Node.js 18+ and pnpm 8+
+- PostgreSQL 14+ (or SQLite in-memory for testing)
+
+### 2. Installation
 
 ```bash
 # Clone the repository
 git clone https://github.com/Tanishk756/OpenRobo.git
 cd OpenRobo
 
-# Install Node workspace dependencies
+# Install Node dependencies
 pnpm install
 
-# Install Python workspace packages in editable mode
-python -m pip install -e packages/schemas -e packages/compat-engine -e packages/cli -e "apps/api[test]"
+# Install Python packages in development editable mode
+pip install -e packages/schemas
+pip install -e packages/compat-engine
+pip install -e packages/workspace-gen
+pip install -e packages/cli
+pip install -e apps/api
 ```
 
-### 2. Verify System & Run Tests
+### 3. CLI Workspace Generation
 
 ```bash
-# Runs full gate: Linter + JSON Schema Validator + Pytest (33 tests) + Vitest (6 tests) + Next.js Build
+# Preview a synthesized ROS 2 workspace from a stack manifest
+openrobo workspace preview samples/mobile_robot_nav.stack.json
+
+# Generate colcon workspace files and container definitions to a folder
+openrobo workspace generate samples/mobile_robot_nav.stack.json --output ./my_robot_ws
+
+# Export a deterministic ZIP archive bundle
+openrobo workspace archive samples/mobile_robot_nav.stack.json --output ./my_robot_ws.zip
+```
+
+### 4. Running the Web Platform & API Locally
+
+```bash
+# Start FastAPI backend (Port 8000)
+pnpm run api:dev
+
+# Start Next.js frontend (Port 3000)
+pnpm run web:dev
+```
+
+Open [http://localhost:3000/stack-builder](http://localhost:3000/stack-builder) to visually compose robotics stacks and generate deployments.
+
+---
+
+## Testing & Quality Assurance
+
+Run the comprehensive monorepo verification check:
+
+```bash
 pnpm run check
 ```
 
-### 3. Start Local Services
-
-```bash
-# Start FastAPI backend (http://localhost:8000)
-pnpm run dev:api
-
-# Start Next.js Resource Explorer (http://localhost:3000)
-pnpm run dev:web
-
-# Seed 20+ canonical robotics resources into the local database
-pnpm run seed
-```
-
----
-
-## CLI Usage
-
-The `openrobo` CLI provides instant developer commands for searching, validating, and ingesting robotics components:
-
-```bash
-# Search robotics registry with ranking & typo tolerance
-openrobo search "nav2"
-openrobo search "slam" --domain mapping --limit 10
-
-# Validate a resource manifest against the canonical schema
-openrobo validate samples/ros2_control.resource.json
-
-# Statically ingest a robotics repository from GitHub (safe, no code execution)
-openrobo ingest github https://github.com/ros-navigation/navigation2
-```
-
----
-
-## Search Engine & Taxonomy Indexing
-
-OpenRobo Milestone 2 introduces a PostgreSQL-native search architecture:
-
-| Feature | Implementation | Description |
-| :--- | :--- | :--- |
-| **Weighted FTS** | `tsvector` + GIN Indexes | Name (`Weight A`), Summary (`Weight B`), Description (`Weight C`) |
-| **Fuzzy Matching** | `pg_trgm` Trigram Similarity | Typo tolerance (e.g. `plotjugler` discovers `PlotJuggler`) |
-| **Multi-Taxonomy Facets** | Category Aggregations | Dynamic counts across resource types, domains, capabilities, licenses, and ROS distros |
-| **Search Highlights** | Regex Token Highlighting | Matching tokens highlighted directly in card descriptions |
-| **Shareable URL State** | Next.js Query Params | Browser URLs persist search filters (e.g. `/resources?q=slam&domain=mapping`) |
-
----
-
-
-## Interactive Robotics Stack Builder (`/stack-builder`)
-
-Milestone 4 introduces OpenRobo's end-to-end interactive robotics stack composition and validation workspace:
-
-- **3-Panel Engineering Workspace**:
-  - **Resource Library**: Real-time indexed search across hardware drivers, ROS packages, middleware, navigation, and perception layers.
-  - **Pipeline Assembly Area**: Categorized composition view (Sensors, Middleware, Perception, Localization, SLAM, Navigation, Control, Simulation).
-  - **Live Compatibility Inspector**: Real-time stack health summary, 8-rule deterministic diagnostics, and remediation suggestions.
-- **Dependency & Version Resolver**:
-  - Automatically identifies missing dependencies across transitive graph links (`DEPENDS_ON`, `REQUIRES`, `PROVIDES`).
-  - Detects version range incompatibilities and circular dependency cycles.
-  - Generates 1-click **Resolution Proposals** to automatically resolve stack requirements without destructive mutations.
-- **Canonical Manifest Import/Export**:
-  - Export full declarative stack configurations as `.openrobo.stack.json` matching `schemas/stack.schema.json`.
-  - Safe, untrusted import validation verifying against canonical schema Draft 2020-12 and registry availability.
-- **Starter Engineering Templates**:
-  - Mobile Robot Navigation (`turtlebot3_nav2_jazzy`)
-  - RGB-D Perception & Mapping (`realsense_slam_jazzy`)
-  - Manipulation & Arm Control (`ros2_control_manipulation`)
-  - Simulation & Digital Twin (`gazebo_nav2_simulation`)
-
-## Roadmap
-
-| Milestone | Focus Area | Status |
-| :--- | :--- | :--- |
-| **M0 — Foundation** | Canonical JSON Schemas, CI/CD, Monorepo Setup | :white_check_mark: Completed |
-| **M1 — Registry & Discovery** | Resource Registry Engine, Static Ingestion, Resource Explorer UI | :white_check_mark: Completed |
-| **M2 — Search & Taxonomy** | PostgreSQL FTS, Trigram Fuzzy Search, Facets, CLI Search | :white_check_mark: Completed |
-| **M3 — Compatibility Intelligence** | Graph-Based Constraint Reasoning, ROS Compatibility Matrix | :construction: Planned |
-| **M4 ? Interactive Stack Builder** | Visual Composition, Live Compatibility Validation, Dependency Resolver, Manifest Import/Export | :white_check_mark: Completed |
-| **M5 — Workspace Generator** | Dev Container, Dockerfile, and Colcon Workspace Generation | :crystal_ball: Planned |
-
----
-
-## Community & Contributing
-
-We welcome contributions from robotics engineers, software developers, and researchers!
-- Check out our [Contributing Guide](CONTRIBUTING.md) to get started.
-- Read our [Code of Conduct](CODE_OF_CONDUCT.md) to understand community standards.
-- Review our [Security Policy](SECURITY.md) for vulnerability reporting.
+This executes:
+1. `python -m ruff check .` (Python linting)
+2. `python scripts/validate_schemas.py` (Canonical JSON schema validation)
+3. `python -m pytest` (Full Python test suite across API, Compat Engine, Workspace Gen, CLI)
+4. `pnpm --filter openrobo-web lint` (Next.js ESLint)
+5. `pnpm --filter openrobo-web test` (Vitest unit tests)
+6. `pnpm --filter openrobo-web build` (Next.js production bundle compilation)
 
 ---
 
 ## License
 
-OpenRobo is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
-
----
-
-## Maintainer
-
-**Tanishk Singhal**  
-GitHub: [@Tanishk756](https://github.com/Tanishk756)
+Licensed under the **Apache License, Version 2.0**. See [LICENSE](LICENSE) for details.
