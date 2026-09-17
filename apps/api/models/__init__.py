@@ -8,6 +8,7 @@ from .resource import (
     ResourceVersionModel,
     StackManifestModel,
 )
+from .stack import StackModel
 
 __all__ = [
     "Base",
@@ -16,6 +17,7 @@ __all__ = [
     "DomainModel",
     "CapabilityModel",
     "StackManifestModel",
+    "StackModel",
     "GraphNodeModel",
     "GraphEdgeModel",
 ]

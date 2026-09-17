@@ -59,6 +59,27 @@ def validate_sample_instance():
         return True
 
 
+def validate_sample_stack_instance():
+    print("Validating sample stack manifest against stack.schema.json...")
+    stack_schema_path = SCHEMAS_DIR / "stack.schema.json"
+    sample_stack_path = ROOT_DIR / "samples" / "mobile_robot_nav.stack.json"
+    with open(stack_schema_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    with open(sample_stack_path, "r", encoding="utf-8") as f:
+        sample_stack = json.load(f)
+
+    validator = Draft202012Validator(schema)
+    errors = list(validator.iter_errors(sample_stack))
+    if errors:
+        print(f"  [ERROR] Sample stack validation failed with {len(errors)} errors:")
+        for err in errors:
+            print(f"    - {err.message}")
+        return False
+    else:
+        print("  [OK] Sample stack manifest successfully validated.")
+        return True
+
+
 def main():
     all_valid = True
     for schema_file in SCHEMAS_DIR.glob("*.schema.json"):
@@ -66,6 +87,8 @@ def main():
             all_valid = False
 
     if not validate_sample_instance():
+        all_valid = False
+    if not validate_sample_stack_instance():
         all_valid = False
 
     if not all_valid:

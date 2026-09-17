@@ -18,33 +18,82 @@
     "version": {
       "type": "string"
     },
+    "description": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "updated_at": {
+      "type": "string"
+    },
     "robot": {
       "type": "object",
-      "required": ["domain", "type"],
+      "required": [
+        "domain",
+        "type"
+      ],
       "properties": {
-        "domain": { "type": "string" },
-        "type": { "type": "string" }
-      }
+        "domain": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
     },
     "components": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["resource_id"],
+        "required": [
+          "resource_id"
+        ],
         "properties": {
-          "resource_id": { "type": "string" },
-          "version": { "type": "string" },
-          "category": { "type": "string" }
-        }
+          "resource_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "optional": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "configuration": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": true
       }
     },
     "target_platform": {
       "type": "object",
       "properties": {
-        "os": { "type": "string" },
-        "arch": { "type": "string" },
-        "ros_version": { "type": "string" }
-      }
+        "os": {
+          "type": "string"
+        },
+        "arch": {
+          "type": "string"
+        },
+        "ros_version": {
+          "type": "string"
+        },
+        "ros_distribution": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
     }
   },
   "additionalProperties": true
