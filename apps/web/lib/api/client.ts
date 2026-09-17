@@ -16,6 +16,8 @@ import {
   StackTemplate,
   StackUpdateInput,
   StackValidationResponse,
+  WorkspacePreviewResponse,
+  WorkspaceRequest,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -433,5 +435,44 @@ export async function importStackManifest(manifest: Record<string, unknown>): Pr
   } catch (err: any) {
     if (err instanceof ApiError) throw err;
     throw new ApiError('Unable to import stack manifest.', undefined, true);
+  }
+}
+
+export async function previewWorkspace(req: WorkspaceRequest): Promise<WorkspacePreviewResponse> {
+  const url = `${API_BASE_URL}/api/v1/workspace/preview`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(req),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(err?.detail || `Preview failed: HTTP ${res.status}`, res.status);
+    }
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to preview workspace generation.', undefined, true);
+  }
+}
+
+export async function downloadWorkspaceZip(req: WorkspaceRequest): Promise<Blob> {
+  const url = `${API_BASE_URL}/api/v1/workspace/download`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/zip' },
+      body: JSON.stringify(req),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      throw new ApiError(`Download failed: HTTP ${res.status}`, res.status);
+    }
+    return await res.blob();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to download workspace archive.', undefined, true);
   }
 }

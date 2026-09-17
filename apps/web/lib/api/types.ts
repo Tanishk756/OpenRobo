@@ -280,3 +280,39 @@ export interface StackImportResult {
   validation: StackValidationResponse;
   is_valid: boolean;
 }
+
+export interface FileTreeNode {
+  name: string;
+  path?: string;
+  type: 'file' | 'directory';
+  size?: number;
+  is_executable?: boolean;
+  description?: string;
+  children?: Record<string, FileTreeNode>;
+}
+
+export interface WorkspacePreviewResponse {
+  status: string;
+  stack_id: string;
+  stack_name: string;
+  workspace_name: string;
+  target_distro: string;
+  target_os: string;
+  target_arch: string;
+  compatibility_verdict: string;
+  file_count: number;
+  total_bytes: number;
+  file_tree: FileTreeNode;
+  files: Record<string, string>;
+  warnings: string[];
+  unsupported_components: string[];
+  selected_adapters: string[];
+  generator_version: string;
+  generated_at: string;
+}
+
+export interface WorkspaceRequest {
+  stack_id?: string;
+  manifest?: Record<string, unknown>;
+  allow_incompatible?: boolean;
+}

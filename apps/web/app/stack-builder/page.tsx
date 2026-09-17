@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { WorkspaceModal } from './WorkspaceModal';
 import {
   fetchResources,
   fetchStackTemplates,
@@ -55,6 +56,7 @@ export default function StackBuilderPage() {
   const [showResolveModal, setShowResolveModal] = useState(false);
 
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'modified' | 'saving'>('saved');
@@ -206,6 +208,40 @@ export default function StackBuilderPage() {
     setShowResolveModal(false);
     setSaveStatus('modified');
   };
+
+  const buildCurrentManifest = () => ({
+    $schema: 'https://openrobo.org/schemas/v1/stack.schema.json',
+    id: stackName,
+    name: stackName,
+    version: '1.0.0',
+    description: stackDescription,
+    created_at: new Date().toISOString(),
+    robot: {
+      domain: robotDomain,
+      type: robotType,
+    },
+    target_platform: {
+      os: targetOs,
+      architecture: targetArch,
+      ros_distribution: targetRosDistro,
+    },
+    target: {
+      ros_distro: targetRosDistro,
+      os: targetOs,
+      architecture: targetArch,
+    },
+    resources: selectedComponents.map((c) => ({
+      id: c.resource_id,
+      name: c.resource_id.split('/').pop() || c.resource_id,
+      version: c.version || '1.0.0',
+    })),
+    components: selectedComponents.map((c) => ({
+      resource_id: c.resource_id,
+      version: c.version || '1.0.0',
+      category: c.category || 'general',
+      optional: c.optional || false,
+    })),
+  });
 
   const handleExportManifest = () => {
     const manifest = {
@@ -846,6 +882,14 @@ export default function StackBuilderPage() {
           </div>
         </div>
       )}
+
+            {/* WORKSPACE PREVIEW MODAL */}
+      <WorkspaceModal
+        isOpen={showWorkspaceModal}
+        onClose={() => setShowWorkspaceModal(false)}
+        manifest={buildCurrentManifest()}
+        stackName={stackName}
+      />
 
       {/* IMPORT MANIFEST MODAL */}
       {showImportModal && (
