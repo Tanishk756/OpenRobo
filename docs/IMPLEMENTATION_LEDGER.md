@@ -34,7 +34,7 @@
 | **REQ-M6-06** | Rosbag2 Telemetry Foundation | `VERIFIED` | Rosbag2 SQLite3 metadata and message count inspection | `test_rosbag.py` | `openrobo_runtime/telemetry/` | MCAP optional plugin | Telemetry baseline |
 | **REQ-M6-07** | Runtime Studio Web UI & API | `VERIFIED` | Next.js 14 Runtime Studio (`/runtime`) and FastAPI endpoints (`/api/v1/runtime/*`) | `runtime.test.tsx`, `test_runtime_api.py` | `apps/web/app/runtime/`, `apps/api/routers/runtime.py` | None | Full interactive UI |
 | **REQ-M6-08** | Runtime CLI Commands | `VERIFIED` | `openrobo runtime providers/build-verify/connection-inspector/simulators/rosbag` | `test_cli.py` | `packages/cli/openrobo_cli/runtime.py` | None | Complete CLI toolchain |
-### Milestone 6.1 — Live Runtime Wiring, Truthful Readiness & Integration Verification (COMPLETED)
+### Milestone 6.1 â€” Live Runtime Wiring, Truthful Readiness & Integration Verification (COMPLETED)
 - **Date**: September 17, 2026
 - **Status**: COMPLETE & VERIFIED
 - **Key Deliverables**:

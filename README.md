@@ -19,7 +19,7 @@
 
 ## What is OpenRobo?
 
-Robotics software engineering is fragmented across hundreds of isolated repositories, disparate ROS packages, custom sensor drivers, and fragile dependency chains. Integrating a robot stackâ€”from LiDAR SLAM and arm kinematics to hardware interfaces and simulationâ€”often requires hours of manual dependency debugging.
+Robotics software engineering is fragmented across hundreds of isolated repositories, disparate ROS packages, custom sensor drivers, and fragile dependency chains. Integrating a robot stackÃ¢â‚¬â€from LiDAR SLAM and arm kinematics to hardware interfaces and simulationÃ¢â‚¬â€often requires hours of manual dependency debugging.
 
 **OpenRobo** provides a standardized, vendor-neutral software registry, intelligent compatibility engine, stack builder, automated workspace synthesis, and runtime verification platform for modern robotics:
 - **Discover Components**: Search thousands of ROS 2 packages, hardware drivers, simulation models, and algorithms with weighted full-text and fuzzy typo-tolerant indexing.
@@ -37,7 +37,7 @@ Robotics software engineering is fragmented across hundreds of isolated reposito
 - [x] **Zero-Extra-Infrastructure Search Engine**: PostgreSQL-backed weighted full-text search (`tsvector`, GIN indexes) with `pg_trgm` fuzzy similarity matching and multi-taxonomy faceting.
 - [x] **Interactive Robotics Stack Builder**: Visual 3-panel stack composition studio (`/stack-builder`) with real-time constraint evaluation, starter templates, dependency auto-resolution proposals, and manifest import/export.
 - [x] **Hardened Workspace & Deployment Generator**: Synthesizes strictly-typed, statically-validated ROS 2 colcon workspaces, launch pipelines, parameter configurations, least-privilege Dockerfiles, Docker Compose definitions, VS Code Dev Containers, setup scripts, and byte-reproducible ZIP bundles.
-- [x] **Strict Generator Evidence & Safety Model**: Enforces "NO EVIDENCE â†’ NO INVENTED CONFIGURATION". Components distinguish `VERIFIED_ADAPTER`, `USER_CONFIGURED`, `METADATA_DRIVEN`, and `GENERIC_SCAFFOLD` (scaffolding `.example` templates with explicit required manual configuration steps).
+- [x] **Strict Generator Evidence & Safety Model**: Enforces "NO EVIDENCE Ã¢â€ â€™ NO INVENTED CONFIGURATION". Components distinguish `VERIFIED_ADAPTER`, `USER_CONFIGURED`, `METADATA_DRIVEN`, and `GENERIC_SCAFFOLD` (scaffolding `.example` templates with explicit required manual configuration steps).
 - [x] **Reproducible Lockfiles & Provenance**: Generates cryptographic lockfiles (`openrobo.lock.json`) capturing component digests, repository URLs, build types, upstream licenses, evidence levels, and workspace readiness states.
 - [x] **Controlled Build Verification Runner (Milestone 6)**: Pluggable execution engine (`openrobo_runtime`) supporting Docker, Podman, and Local OS providers with timeouts, working-directory constraints, environment allowlists, and exit code capture to transition workspaces from `STATICALLY_VALIDATED` to `BUILD_VERIFIED`.
 - [x] **Native ROS Graph & QoS Introspection (Milestone 6)**: Machine-readable comparison of planned stack intent against observed running nodes and topics, detecting orphaned publishers/subscribers, type mismatches, and QoS incompatibilities (Reliability, Durability).
@@ -57,21 +57,21 @@ OpenRobo is structured as a zero-extra-infrastructure monorepo managed with **pn
 
 ```
 OpenRobo/
-â”œâ”€â”€ schemas/                      # Canonical JSON Schema v2020-12 Definitions
-â”‚   â”œâ”€â”€ resource.schema.json      # Component metadata & platform matrix schema
-â”‚   â”œâ”€â”€ graph.schema.json         # Compatibility & dependency edge schema
-â”‚   â””â”€â”€ stack.schema.json         # Complete robot stack assembly schema
-â”œâ”€â”€ packages/
-â”‚   â”œâ”€â”€ schemas/                  # Python schema validation library (openrobo-schemas)
-â”‚   â”œâ”€â”€ compat-engine/            # Compatibility reasoning & graph engine (openrobo-compat)
-â”‚   â”œâ”€â”€ workspace-gen/            # Hardened ROS 2 workspace generator (openrobo-workspace)
-â”‚   â”œâ”€â”€ runtime-core/             # Runtime execution & build verification engine (openrobo-runtime)
-â”‚   â””â”€â”€ cli/                      # Typer/Rich unified CLI application (openrobo)
-â”œâ”€â”€ apps/
-â”‚   â”œâ”€â”€ api/                      # FastAPI async REST API service
-â”‚   â””â”€â”€ web/                      # Next.js 14 App Router interactive web frontend
-â”œâ”€â”€ scripts/                      # Schema validators & seed database scripts
-â””â”€â”€ docs/                         # Architecture Decision Records & Milestone Plans
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ schemas/                      # Canonical JSON Schema v2020-12 Definitions
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ resource.schema.json      # Component metadata & platform matrix schema
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ graph.schema.json         # Compatibility & dependency edge schema
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ stack.schema.json         # Complete robot stack assembly schema
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ packages/
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ schemas/                  # Python schema validation library (openrobo-schemas)
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ compat-engine/            # Compatibility reasoning & graph engine (openrobo-compat)
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ workspace-gen/            # Hardened ROS 2 workspace generator (openrobo-workspace)
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ runtime-core/             # Runtime execution & build verification engine (openrobo-runtime)
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ cli/                      # Typer/Rich unified CLI application (openrobo)
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ apps/
+Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ api/                      # FastAPI async REST API service
+Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ web/                      # Next.js 14 App Router interactive web frontend
+Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ scripts/                      # Schema validators & seed database scripts
+Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ docs/                         # Architecture Decision Records & Milestone Plans
 ```
 
 ---

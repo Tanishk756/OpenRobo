@@ -1,4 +1,4 @@
-﻿# Security Policy
+# Security Policy
 
 The OpenRobo project takes the security and integrity of robotics software infrastructure seriously. This document outlines our security policies, supported versions, and procedures for reporting potential vulnerabilities.
 
