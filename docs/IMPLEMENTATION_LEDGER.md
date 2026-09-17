@@ -46,8 +46,8 @@ This ledger tracks the implementation, test coverage, verification evidence, and
 
 | Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
 |---|---|---|---|---|---|---|---|
-| **REQ-M3-01** | Knowledge Graph & Compatibility Reasoning | `PLANNED` | Graph-based constraint evaluator (`packages/compat-engine`) | Engine unit & matrix tests | Pending | Rules must be incrementally populated | Implement graph engine |
-| **REQ-M3-02** | Evidence Classifier & Explainer | `PLANNED` | Evidence level tagging and plain-text explanation generator | Explainer unit tests | Pending | Needs community report feedback UI | Implement evidence tagging |
+| **REQ-M3-01** | Knowledge Graph & Compatibility Reasoning | **VERIFIED** | Deterministic rule engine evaluating ROS distro, OS, CPU arch, SemVer constraints, cycles, and transitive conflicts | `test_compat_engine.py`, `test_compatibility_api.py` (49 tests) | `packages/compat-engine/`, `apps/api/routers/compatibility.py`, `docs/M3_VERIFICATION_REPORT.md` | Operates on static graph metadata | Proceed to M4 Stack Builder |
+| **REQ-M3-02** | Evidence Classifier & Explainer | **VERIFIED** | Structured evidence classification (`ci_verified`, `vendor_tested`, `community_reported`, `inferred`) & actionable plain-text explanation generator | `test_compat_engine.py`, `resources.test.tsx` | `openrobo_compat/explainer.py`, `ResourceDetailDrawer.tsx` | UI displays live conflict diagnostics and suggestions | Connect to Stack Builder in M4 |
 
 ---
 
