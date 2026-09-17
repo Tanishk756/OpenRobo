@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ResourcesPage from '../../app/resources/page';
 import * as apiClient from '../../lib/api/client';
-import { Resource, SearchResponse, SearchResultHit } from '../../lib/api/types';
+import { Resource, SearchResponse } from '../../lib/api/types';
 
 const MOCK_RESOURCES: Resource[] = [
   {
@@ -121,8 +121,33 @@ describe('ResourcesPage (Resource Explorer & Search Engine)', () => {
     });
   });
 
-  it('opens detail drawer when a resource card is clicked and displays provenance', async () => {
+  it('opens detail drawer when a resource card is clicked and displays provenance and compatibility', async () => {
     vi.spyOn(apiClient, 'searchResources').mockResolvedValueOnce(MOCK_SEARCH_RESPONSE);
+    vi.spyOn(apiClient, 'fetchResourceCompatibilityProfile').mockResolvedValueOnce({
+      resource_id: 'ros-controls/ros2_control',
+      name: 'ros2_control Framework',
+      version: '4.15.0',
+      type: 'ros_package',
+      evidence_level: 'ci_verified',
+      direct_dependencies: [],
+      provides: ['hardware-interface'],
+      requires: [],
+      tested_with: ['robotis/turtlebot3'],
+      compatible_with: ['ros-navigation/nav2'],
+      conflicts_with: [],
+      platform_matrix: { ros: ['Jazzy', 'Humble'], architecture: ['x86_64', 'aarch64'] },
+    });
+    vi.spyOn(apiClient, 'evaluateCompatibility').mockResolvedValueOnce({
+      status: 'compatible',
+      resource_ids: ['ros-controls/ros2_control'],
+      rule_evaluations: [],
+      conflicts: [],
+      warnings: [],
+      missing_requirements: [],
+      dependency_paths: [],
+      evidence_level: 'ci_verified',
+      evaluated_at: '2026-09-17T12:00:00Z',
+    });
 
     render(<ResourcesPage />);
 
@@ -133,9 +158,10 @@ describe('ResourcesPage (Resource Explorer & Search Engine)', () => {
     // Click card
     fireEvent.click(screen.getByTestId('resource-card-ros-controls/ros2_control'));
 
-    // Verify detail drawer opened with provenance
+    // Verify detail drawer opened with provenance and compatibility section
     await waitFor(() => {
       expect(screen.getByTestId('detail-drawer')).toBeInTheDocument();
+      expect(screen.getByTestId('compatibility-section')).toBeInTheDocument();
       expect(screen.getByText(/Platform Matrix/i)).toBeInTheDocument();
       expect(screen.getByText(/Robotics Capabilities/i)).toBeInTheDocument();
       expect(screen.getByTestId('provenance-section')).toBeInTheDocument();
