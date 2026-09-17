@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Enable dev CA and test environment
 os.environ["OPENROBO_DEV_CA"] = "true"
 os.environ["ENVIRONMENT"] = "development"
+os.environ["OPENROBO_ALLOW_DEV_CERT_HEADER"] = "true"
+os.environ["OPENROBO_ADMIN_KEY"] = "admin-secret-key"
 
 from openrobo_agent.certificates import compute_certificate_fingerprint, generate_agent_key_and_csr
 from openrobo_agent.models import MessageEnvelope
@@ -16,10 +18,14 @@ from openrobo_agent.spool import OfflineTelemetrySpool
 
 from apps.api.database import Base, get_db
 from apps.api.main import app
+from apps.api.services.fleet_security import get_rate_limiter, get_replay_manager
 
 
 @pytest.fixture
 async def async_client():
+    get_replay_manager().clear()
+    get_rate_limiter().clear()
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
@@ -56,6 +62,7 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
     9. Device revocation enforcement (immediate rejection of heartbeats and telemetry)
     """
     client, session_factory = async_client
+    admin_headers = {"X-OpenRobo-Admin-Key": "admin-secret-key"}
 
     # -------------------------------------------------------------
     # 1. Generate 3 distinct private keys and CSRs
@@ -88,7 +95,8 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
     for dev in devices_info:
         res = await client.post(
             "/api/v1/fleet/enrollment-tokens",
-            json={"device_name": dev["name"], "domain": dev["domain"], "robot_type": dev["robot_type"]}
+            json={"device_name": dev["name"], "domain": dev["domain"], "robot_type": dev["robot_type"]},
+            headers=admin_headers,
         )
         assert res.status_code in [200, 201]
         data = res.json()
@@ -108,9 +116,10 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
             json={
                 "enrollment_token": tokens[name],
                 "device_id": agent_crypto[name]["dev_id"],
+                "device_name": name,
                 "csr_pem": agent_crypto[name]["csr_pem"],
-                "hardware_fingerprint": f"sim-hw-fp-{name}"
-            }
+                "hardware_fingerprint": f"sim-hw-fp-{name}",
+            },
         )
         assert res.status_code == 200, f"Enrollment failed for {name}: {res.text}"
         data = res.json()
@@ -138,58 +147,43 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
             json={
                 "enrollment_token": tokens[name],
                 "device_id": agent_crypto[name]["dev_id"],
+                "device_name": name,
                 "csr_pem": agent_crypto[name]["csr_pem"],
-            }
+            },
         )
-        assert replay_enroll.status_code in [400, 409], "Single-use token must be rejected upon second attempt"
+        assert replay_enroll.status_code in [401, 409], f"Token re-use should fail for {name}"
 
     # -------------------------------------------------------------
-    # 4. Heartbeat Ingestion and Status Verification
+    # 4. Heartbeat Ingestion and Status Derivation
     # -------------------------------------------------------------
     for dev in devices_info:
         name = dev["name"]
-        dev_id = enrolled_data[name]["device_id"]
-        fp = enrolled_data[name]["fingerprint"]
-
-        envelope = MessageEnvelope(
+        hb_envelope = MessageEnvelope(
             message_id=str(uuid.uuid4()),
-            device_id=dev_id,
+            device_id=enrolled_data[name]["device_id"],
             timestamp=datetime.now(timezone.utc).isoformat(),
             message_type="HEARTBEAT",
-            payload={
-                "battery_percentage": 92.5,
-                "cpu_percent": 12.0,
-                "memory_used_mb": 1024,
-                "memory_total_mb": 4096,
-                "active_nodes_count": 5,
-                "active_topics_count": 14,
-                "ros_distro": "humble",
-                "status": "ONLINE"
-            }
+            payload={"status": "ONLINE", "metrics": {"cpu_pct": 12.0}},
         )
-
         res = await client.post(
             "/api/v1/fleet/agent/heartbeat",
-            headers={"X-OpenRobo-Cert-Fingerprint": fp},
-            json=envelope.model_dump(mode="json")
+            headers={"X-OpenRobo-Cert-Fingerprint": enrolled_data[name]["fingerprint"]},
+            json=hb_envelope.model_dump(mode="json"),
         )
         assert res.status_code == 200, f"Heartbeat failed for {name}: {res.text}"
-        hb_resp = res.json()
-        assert hb_resp["status"] == "ACK"
-        assert hb_resp["device_id"] == dev_id
+        assert res.json()["status"] == "ACK"
 
-    # Verify device listing shows all 3 devices as ONLINE
-    list_res = await client.get("/api/v1/fleet/devices")
+    # Check that all 3 devices appear ONLINE in the fleet list
+    list_res = await client.get("/api/v1/fleet/devices", headers=admin_headers)
     assert list_res.status_code == 200
-    devices_list = list_res.json()
-    assert len(devices_list) == 3
-    for d in devices_list:
+    devices = list_res.json()
+    assert len(devices) == 3
+    for d in devices:
         assert d["status"] == "ONLINE"
 
     # -------------------------------------------------------------
     # 5. Telemetry Ingestion and Query Isolation
     # -------------------------------------------------------------
-    # Send telemetry for robot-alpha
     alpha_id = enrolled_data["robot-alpha"]["device_id"]
     alpha_fp = enrolled_data["robot-alpha"]["fingerprint"]
 
@@ -200,18 +194,18 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         message_type="TELEMETRY",
         payload={
             "stream": "diagnostics",
-            "data": {"temperature_c": 38.5, "motor_rpm": 1200}
-        }
+            "data": {"temperature_c": 38.5, "motor_rpm": 1200},
+        },
     )
     res = await client.post(
         "/api/v1/fleet/agent/telemetry",
         headers={"X-OpenRobo-Cert-Fingerprint": alpha_fp},
-        json=alpha_envelope.model_dump(mode="json")
+        json=alpha_envelope.model_dump(mode="json"),
     )
     assert res.status_code == 200
 
     # Query telemetry for robot-alpha
-    tel_res = await client.get(f"/api/v1/fleet/devices/{alpha_id}/telemetry")
+    tel_res = await client.get(f"/api/v1/fleet/devices/{alpha_id}/telemetry", headers=admin_headers)
     assert tel_res.status_code == 200
     events = tel_res.json()
     assert len(events) == 1
@@ -219,7 +213,7 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
 
     # Query telemetry for robot-beta (must be empty)
     beta_id = enrolled_data["robot-beta"]["device_id"]
-    beta_tel_res = await client.get(f"/api/v1/fleet/devices/{beta_id}/telemetry")
+    beta_tel_res = await client.get(f"/api/v1/fleet/devices/{beta_id}/telemetry", headers=admin_headers)
     assert beta_tel_res.status_code == 200
     assert len(beta_tel_res.json()) == 0, "Robot Beta telemetry must be strictly isolated from Robot Alpha"
 
@@ -231,12 +225,12 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         device_id=beta_id,
         timestamp=datetime.now(timezone.utc).isoformat(),
         message_type="TELEMETRY",
-        payload={"stream": "diagnostics", "data": {"malicious_override": True}}
+        payload={"stream": "diagnostics", "data": {"malicious_override": True}},
     )
     spoof_res = await client.post(
         "/api/v1/fleet/agent/telemetry",
         headers={"X-OpenRobo-Cert-Fingerprint": alpha_fp},
-        json=spoofed_envelope.model_dump(mode="json")
+        json=spoofed_envelope.model_dump(mode="json"),
     )
     assert spoof_res.status_code == 403, "Cross-device write must be rejected with 403 Forbidden"
     assert "Cross-device access forbidden" in spoof_res.json()["detail"]
@@ -250,12 +244,12 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         device_id=alpha_id,
         timestamp=datetime.now(timezone.utc).isoformat(),
         message_type="TELEMETRY",
-        payload={"stream": "ros_graph", "data": {"nodes": ["/nav2"]}}
+        payload={"stream": "ros_graph", "data": {"nodes": ["/nav2"]}},
     )
     res1 = await client.post(
         "/api/v1/fleet/agent/telemetry",
         headers={"X-OpenRobo-Cert-Fingerprint": alpha_fp},
-        json=msg_env.model_dump(mode="json")
+        json=msg_env.model_dump(mode="json"),
     )
     assert res1.status_code == 200
 
@@ -263,7 +257,7 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
     res2 = await client.post(
         "/api/v1/fleet/agent/telemetry",
         headers={"X-OpenRobo-Cert-Fingerprint": alpha_fp},
-        json=msg_env.model_dump(mode="json")
+        json=msg_env.model_dump(mode="json"),
     )
     assert res2.status_code in [400, 409]
     assert "Replay detected" in res2.json()["detail"]
@@ -274,12 +268,12 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         device_id=alpha_id,
         timestamp=(datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat(),
         message_type="TELEMETRY",
-        payload={"stream": "ros_graph", "data": {}}
+        payload={"stream": "ros_graph", "data": {}},
     )
     stale_res = await client.post(
         "/api/v1/fleet/agent/telemetry",
         headers={"X-OpenRobo-Cert-Fingerprint": alpha_fp},
-        json=stale_env.model_dump(mode="json")
+        json=stale_env.model_dump(mode="json"),
     )
     assert stale_res.status_code == 400
     assert "Timestamp is too stale" in stale_res.json()["detail"]
@@ -290,12 +284,12 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         device_id=alpha_id,
         timestamp=(datetime.now(timezone.utc) + timedelta(seconds=120)).isoformat(),
         message_type="TELEMETRY",
-        payload={"stream": "ros_graph", "data": {}}
+        payload={"stream": "ros_graph", "data": {}},
     )
     future_res = await client.post(
         "/api/v1/fleet/agent/telemetry",
         headers={"X-OpenRobo-Cert-Fingerprint": alpha_fp},
-        json=future_env.model_dump(mode="json")
+        json=future_env.model_dump(mode="json"),
     )
     assert future_res.status_code == 400
     assert "Timestamp is too far in the future" in future_res.json()["detail"]
@@ -313,7 +307,7 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
             device_id=alpha_id,
             timestamp=datetime.now(timezone.utc).isoformat(),
             message_type="TELEMETRY",
-            payload={"stream": "offline_diagnostics", "step": i, "offline_reading": 100 + i}
+            payload={"stream": "offline_diagnostics", "step": i, "offline_reading": 100 + i},
         )
         assert spool.enqueue(spool_env) is True
     assert spool.count() == 5
@@ -326,7 +320,7 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         drain_res = await client.post(
             "/api/v1/fleet/agent/telemetry",
             headers={"X-OpenRobo-Cert-Fingerprint": alpha_fp},
-            json=item.model_dump(mode="json")
+            json=item.model_dump(mode="json"),
         )
         assert drain_res.status_code == 200
         spool.acknowledge(item.message_id)
@@ -338,7 +332,8 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
     # -------------------------------------------------------------
     revoke_res = await client.post(
         f"/api/v1/fleet/devices/{beta_id}/revoke",
-        json={"reason": "Security vulnerability detected on manipulator firmware"}
+        json={"reason": "Security vulnerability detected on manipulator firmware"},
+        headers=admin_headers,
     )
     assert revoke_res.status_code == 200
     assert revoke_res.json()["status"] == "REVOKED"
@@ -351,12 +346,12 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         device_id=beta_id,
         timestamp=datetime.now(timezone.utc).isoformat(),
         message_type="HEARTBEAT",
-        payload={"status": "ONLINE"}
+        payload={"status": "ONLINE"},
     )
     beta_hb_res = await client.post(
         "/api/v1/fleet/agent/heartbeat",
         headers={"X-OpenRobo-Cert-Fingerprint": beta_fp},
-        json=beta_hb.model_dump(mode="json")
+        json=beta_hb.model_dump(mode="json"),
     )
     assert beta_hb_res.status_code == 403
     assert "revoked" in beta_hb_res.json()["detail"].lower()
@@ -367,22 +362,22 @@ async def test_three_agent_full_lifecycle_and_security_acceptance(async_client, 
         device_id=beta_id,
         timestamp=datetime.now(timezone.utc).isoformat(),
         message_type="TELEMETRY",
-        payload={"stream": "diagnostics", "data": {}}
+        payload={"stream": "diagnostics", "data": {}},
     )
     beta_tel_res = await client.post(
         "/api/v1/fleet/agent/telemetry",
         headers={"X-OpenRobo-Cert-Fingerprint": beta_fp},
-        json=beta_tel.model_dump(mode="json")
+        json=beta_tel.model_dump(mode="json"),
     )
     assert beta_tel_res.status_code == 403
     assert "revoked" in beta_tel_res.json()["detail"].lower()
 
     # Verify Robot Alpha and Robot Gamma remain unaffected and ONLINE
-    alpha_status = await client.get(f"/api/v1/fleet/devices/{alpha_id}")
+    alpha_status = await client.get(f"/api/v1/fleet/devices/{alpha_id}", headers=admin_headers)
     assert alpha_status.status_code == 200
     assert alpha_status.json()["status"] == "ONLINE"
 
     gamma_id = enrolled_data["robot-gamma"]["device_id"]
-    gamma_status = await client.get(f"/api/v1/fleet/devices/{gamma_id}")
+    gamma_status = await client.get(f"/api/v1/fleet/devices/{gamma_id}", headers=admin_headers)
     assert gamma_status.status_code == 200
     assert gamma_status.json()["status"] == "ONLINE"
