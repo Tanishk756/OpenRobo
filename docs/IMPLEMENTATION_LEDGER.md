@@ -21,6 +21,7 @@
 | **M6** | Runtime Architecture, Execution Providers & Adapters | `IMPLEMENTED & TESTED` | 131/131 Pytest, 16/16 Vitest | `docs/M6_VERIFICATION_REPORT.md` |
 | **M6.1** | Live Runtime Wiring, Truthful Readiness & Studio | `LIVE WIRING VERIFIED` | 131/131 Pytest, 16/16 Vitest | `docs/M6_LIVE_RUNTIME_REPORT.md` |
 | **M6.2** | Live Runtime Proof, End-to-End Acceptance & Colcon | `LIVE ACCEPTANCE VERIFIED` | 131/131 Pytest, 16/16 Vitest, 10/10 Live Phases | `docs/M6_LIVE_ACCEPTANCE_REPORT.md` |
+| **M7.1** | Secure Remote Agent, Device Identity & Fleet Foundation | `LOCALLY ACCEPTANCE VERIFIED & LOAD SIMULATED` | 149/149 Pytest, 19/19 Vitest, 3-Agent Acceptance, 100-Agent Sim | `docs/M7_1_VERIFICATION_REPORT.md` |
 
 ---
 
@@ -52,3 +53,21 @@
   - `ros-humble-connection-inspector` v1.0.1 package probed and CLI executed (`inspect_cli`).
   - Real `colcon build` executed on generated workspace package `openrobo_bringup` (exit code 0 in 2.80s).
   - All 131 Python unit/integration tests and 16 frontend Vitest tests passing.
+
+---
+
+## Milestone 7.1 - Secure Remote Agent, Device Identity & Fleet Foundation
+
+| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Next Action |
+|---|---|---|---|---|---|---|---|
+| **REQ-M7-01** | Cryptographic X.509 Device PKI | `VERIFIED` | Ed25519 keypairs, CSR generation, Development CA, and fingerprint computation via third-party `cryptography` package | `test_certificates.py`, `test_fleet_api.py` | `openrobo_agent/certificates.py`, `apps/api/services/fleet_pki.py` | Dev CA strictly gated behind `OPENROBO_DEV_CA=true` | Production CA integration |
+| **REQ-M7-02** | Single-Use Transactional Enrollment | `VERIFIED` | Cryptographically secure tokens (`orb_tok_...`), SHA-256 hashed storage, atomic DB invalidation | `test_fleet_api.py`, `test_multi_agent_fleet.py` | `apps/api/routers/fleet.py`, `apps/api/models/fleet.py` | Single-use enforced | Production token distribution |
+| **REQ-M7-03** | mTLS Trust Boundary & Replay Protection | `VERIFIED` | Formal reverse-proxy and direct TLS boundary; sliding-window (?60s) and bounded deduplication store | `test_fleet_api.py`, `test_multi_agent_fleet.py` | `apps/api/services/fleet_security.py` | In-memory deduplication cache | Distributed cache in M8 |
+| **REQ-M7-04** | Strict Read-Oriented Agent Operations | `VERIFIED` | Read-only operations enum (`PING`, `GET_AGENT_INFO`, `GET_RUNTIME_STATUS`, `GET_ROS_ENVIRONMENT`, etc.); zero arbitrary remote shell execution | `test_runtime.py` | `openrobo_agent/runtime.py` | No arbitrary execution endpoints | Maintained in M7.2 OTA |
+| **REQ-M7-05** | Offline Durable SQLite Spool | `VERIFIED` | Thread-safe local SQLite spool with 5000 max events, 50MB disk bounds, 7-day TTL, and FIFO eviction | `test_spool.py`, `test_multi_agent_fleet.py` | `openrobo_agent/spool.py` | At-least-once delivery contract | Network drain manager |
+| **REQ-M7-06** | Fleet Management CLI | `VERIFIED` | `openrobo fleet tokens-create/devices/revoke` and `openrobo agent init/enroll/status/doctor/service/run` | `test_fleet_cli.py`, `test_cli.py` | `packages/cli/openrobo_cli/fleet.py`, `packages/cli/openrobo_cli/agent.py` | Non-root systemd generation | Auto-updater in M7.2 |
+| **REQ-M7-07** | Fleet Studio Web UI | `VERIFIED` | Next.js 14 Fleet Studio (`/fleet`) with live metrics, token issuance, device list, details drawer, and demo mode | `fleet.test.tsx` | `apps/web/app/fleet/page.tsx` | None | OTA Rollout Studio in M7.2 |
+| **REQ-M7-08** | Multi-Agent E2E Acceptance | `VERIFIED` | 3-agent acceptance (`robot-alpha`, `robot-beta`, `robot-gamma`) verifying key isolation, heartbeats, telemetry, spooling, 403 cross-device rejection, and revocation | `test_multi_agent_fleet.py` | `tests/integration/test_multi_agent_fleet.py` | None | Passed in CI |
+| **REQ-M7-09** | 100-Agent Control-Plane Simulation | `VERIFIED` | Concurrent 100-agent key generation, enrollment token consumption, X.509 cert issuance, and concurrent heartbeat cycles (100% success, 0 errors) | `simulate_fleet_load.py` | `scripts/simulate_fleet_load.py`, `docs/M7_1_VERIFICATION_REPORT.md` | Local simulation benchmark | Production benchmark |
+
+---

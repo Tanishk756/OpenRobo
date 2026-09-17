@@ -30,3 +30,12 @@ OpenRobo integrates with robotics simulation environments via command-line adapt
 ## Connection Inspector Tool Boundary Notice (M6.1)
 
 OpenRobo interacts with external ROS 2 tools such as `connection_inspector` strictly as separate operating system processes via standardized command-line interfaces. No source code or GPL libraries are linked, embedded, or bundled within OpenRobo. All process invocations require explicit user action and adhere to process boundary isolation.
+
+---
+
+## 2. Cryptography Library (`cryptography`)
+
+- **Project**: `pyca/cryptography`
+- **License**: Dual-licensed under **Apache License 2.0** and **BSD 3-Clause License**
+- **Usage**: Used for mature X.509 certificate generation, PKCS#10 CSR handling, Ed25519 keypair management, SHA-256 fingerprinting, and development PKI operations.
+- **Boundary**: Imported as a standard Python third-party dependency.
