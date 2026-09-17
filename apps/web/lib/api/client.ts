@@ -2,12 +2,20 @@ import {
   CompatibilityMatrixResponse,
   CompatibilityResult,
   EnvironmentTarget,
+  ResolutionProposal,
   Resource,
   ResourceCompatibilityProfile,
   ResourceListResult,
   ResourceQueryParams,
   SearchFacetDistribution,
   SearchResponse,
+  Stack,
+  StackComponent,
+  StackCreateInput,
+  StackImportResult,
+  StackTemplate,
+  StackUpdateInput,
+  StackValidationResponse,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -99,17 +107,13 @@ export async function fetchSearchFacets(q?: string): Promise<SearchFacetDistribu
 }
 
 export async function fetchResources(params: ResourceQueryParams = {}): Promise<ResourceListResult> {
-  try {
-    const searchRes = await searchResources(params);
-    return {
-      items: searchRes.items.map((hit) => hit.resource),
-      total: searchRes.total,
-      limit: searchRes.limit,
-      offset: searchRes.offset,
-    };
-  } catch (err) {
-    throw err;
-  }
+  const searchRes = await searchResources(params);
+  return {
+    items: searchRes.items.map((hit) => hit.resource),
+    total: searchRes.total,
+    limit: searchRes.limit,
+    offset: searchRes.offset,
+  };
 }
 
 export async function fetchResourceById(resourceId: string): Promise<Resource> {
@@ -228,5 +232,206 @@ export async function fetchCompatibilityMatrix(
   } catch (err: any) {
     if (err instanceof ApiError) throw err;
     throw new ApiError('Unable to fetch compatibility matrix.', undefined, true);
+  }
+}
+
+// ---------------- STACK BUILDER APIS ----------------
+
+export async function fetchStackTemplates(): Promise<StackTemplate[]> {
+  const url = `${API_BASE_URL}/api/v1/stacks/templates`;
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Failed to fetch templates: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to reach OpenRobo Stacks API for templates.', undefined, true);
+  }
+}
+
+export async function validateAdhocStack(payload: {
+  components: StackComponent[];
+  target_os?: string;
+  target_arch?: string;
+  target_ros_distro?: string;
+}): Promise<StackValidationResponse> {
+  const url = `${API_BASE_URL}/api/v1/stacks/validate`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Stack validation failed: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to validate stack with backend engine.', undefined, true);
+  }
+}
+
+export async function resolveAdhocStack(payload: {
+  components: StackComponent[];
+  target_os?: string;
+  target_arch?: string;
+  target_ros_distro?: string;
+}): Promise<ResolutionProposal> {
+  const url = `${API_BASE_URL}/api/v1/stacks/resolve`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Stack resolution failed: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to resolve stack dependencies.', undefined, true);
+  }
+}
+
+export async function fetchStacks(params: { q?: string; domain?: string; limit?: number; offset?: number } = {}): Promise<Stack[]> {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set('q', params.q);
+  if (params.domain) searchParams.set('domain', params.domain);
+  if (params.limit) searchParams.set('limit', params.limit.toString());
+  if (params.offset !== undefined) searchParams.set('offset', params.offset.toString());
+
+  const queryString = searchParams.toString();
+  const url = `${API_BASE_URL}/api/v1/stacks${queryString ? `?${queryString}` : ''}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Failed to fetch stacks: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to fetch stacks from backend.', undefined, true);
+  }
+}
+
+export async function fetchStackById(id: string): Promise<Stack> {
+  const url = `${API_BASE_URL}/api/v1/stacks/${id}`;
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Stack '${id}' not found: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(`Unable to fetch stack '${id}'.`, undefined, true);
+  }
+}
+
+export async function createStack(input: StackCreateInput): Promise<Stack> {
+  const url = `${API_BASE_URL}/api/v1/stacks`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Failed to create stack: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to create stack on backend.', undefined, true);
+  }
+}
+
+export async function updateStack(id: string, input: StackUpdateInput): Promise<Stack> {
+  const url = `${API_BASE_URL}/api/v1/stacks/${id}`;
+  try {
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Failed to update stack: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(`Unable to update stack '${id}'.`, undefined, true);
+  }
+}
+
+export async function deleteStack(id: string): Promise<void> {
+  const url = `${API_BASE_URL}/api/v1/stacks/${id}`;
+  try {
+    const res = await fetch(url, {
+      method: 'DELETE',
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Failed to delete stack: HTTP ${res.status}`, res.status);
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(`Unable to delete stack '${id}'.`, undefined, true);
+  }
+}
+
+export async function fetchStackManifest(id: string): Promise<Record<string, unknown>> {
+  const url = `${API_BASE_URL}/api/v1/stacks/${id}/manifest`;
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Failed to export stack manifest: HTTP ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to export stack manifest.', undefined, true);
+  }
+}
+
+export async function importStackManifest(manifest: Record<string, unknown>): Promise<StackImportResult> {
+  const url = `${API_BASE_URL}/api/v1/stacks/import`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ manifest }),
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(err?.detail?.message || `Import failed with HTTP ${res.status}`, res.status);
+    }
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to import stack manifest.', undefined, true);
   }
 }

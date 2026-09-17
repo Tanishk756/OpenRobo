@@ -111,6 +111,7 @@ export type EvidenceLevel = 'ci_verified' | 'vendor_tested' | 'community_reporte
 
 export interface EnvironmentTarget {
   ros_version?: string;
+  ros_distribution?: string;
   os?: string;
   os_version?: string;
   cpu_architecture?: string;
@@ -169,4 +170,113 @@ export interface CompatibilityMatrixResponse {
   matrix: Record<string, Record<string, CompatibilityResult>>;
   summary: Record<string, number>;
   evaluated_at: string;
+}
+
+export interface StackComponent {
+  resource_id: string;
+  version?: string;
+  category?: string;
+  optional?: boolean;
+  notes?: string;
+  configuration?: Record<string, unknown>;
+}
+
+export interface Stack {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  robot_domain: string;
+  robot_type: string;
+  target_os?: string;
+  target_arch?: string;
+  target_ros_distro?: string;
+  components: StackComponent[];
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StackCreateInput {
+  name: string;
+  version?: string;
+  description?: string;
+  robot_domain?: string;
+  robot_type?: string;
+  target_os?: string;
+  target_arch?: string;
+  target_ros_distro?: string;
+  components?: StackComponent[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface StackUpdateInput {
+  name?: string;
+  version?: string;
+  description?: string;
+  robot_domain?: string;
+  robot_type?: string;
+  target_os?: string;
+  target_arch?: string;
+  target_ros_distro?: string;
+  components?: StackComponent[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProposedComponentAction {
+  action: 'add_component' | 'remove_component' | 'change_version';
+  resource_id: string;
+  name: string;
+  version?: string;
+  category?: string;
+  reason: string;
+  required_by?: string;
+  optional?: boolean;
+}
+
+export interface ResolutionProposal {
+  is_fully_resolved: boolean;
+  missing_mandatory_count: number;
+  missing_optional_count: number;
+  proposed_actions: ProposedComponentAction[];
+  conflicts: ConflictDetail[];
+  warnings: string[];
+  summary: string;
+}
+
+export interface StackValidationResponse {
+  stack_id?: string;
+  status: CompatibilityStatus;
+  total_components: number;
+  verified_compatible_count: number;
+  conditional_count: number;
+  incompatible_count: number;
+  unknown_count: number;
+  missing_dependencies_count: number;
+  version_conflicts_count: number;
+  cycles_count: number;
+  compatibility_result: CompatibilityResult;
+  resolution_proposal?: ResolutionProposal;
+  evaluated_at: string;
+}
+
+export interface StackTemplate {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  robot_domain: string;
+  robot_type: string;
+  target_os: string;
+  target_arch: string;
+  target_ros_distro: string;
+  components: StackComponent[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface StackImportResult {
+  manifest: Record<string, unknown>;
+  unavailable_resources: string[];
+  validation: StackValidationResponse;
+  is_valid: boolean;
 }

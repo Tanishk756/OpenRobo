@@ -18,10 +18,17 @@ export default function Navbar() {
             <line x1="16" y1="16" x2="16" y2="16"></line>
           </svg>
           <span>OpenRobo</span>
-          <span className="brand-badge">M1 REGISTRY</span>
+          <span className="brand-badge">STACK BUILDER</span>
         </Link>
 
         <nav className="nav-links">
+          <Link
+            href="/stack-builder"
+            className={`nav-link ${pathname === '/stack-builder' ? 'active' : ''}`}
+            style={{ color: pathname === '/stack-builder' ? 'var(--accent-cyan)' : undefined }}
+          >
+            Stack Builder
+          </Link>
           <Link
             href="/resources"
             className={`nav-link ${pathname === '/resources' ? 'active' : ''}`}
