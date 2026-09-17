@@ -29,25 +29,25 @@ OpenRobo now provides:
 
 | Subsystem | Test Suite Location | Tests | Status |
 |---|---|---|---|
-| Environment Allowlist & Podman Capabilities | `packages/runtime-core/tests/test_env_allowlist.py` | 2 | **100% Passed** |
-| Live ROS Graph Collector & Fallbacks | `packages/runtime-core/tests/test_live_collector.py` | 2 | **100% Passed** |
-| ROS Environment Detector | `packages/runtime-core/tests/test_ros_availability.py` | 2 | **100% Passed** |
-| Runtime Contract & Type Mismatch | `packages/runtime-core/tests/test_runtime_contract.py` | 3 | **100% Passed** |
-| Runtime Build Runner | `packages/runtime-core/tests/test_build_runner.py` | 3 | **100% Passed** |
-| Connection Inspector Dynamic Discovery | `packages/runtime-core/tests/test_connection_inspector.py` | 4 | **100% Passed** |
-| ROS Graph & QoS Introspection | `packages/runtime-core/tests/test_introspection.py` | 3 | **100% Passed** |
-| QoS Policy Engine | `packages/runtime-core/tests/test_qos.py` | 3 | **100% Passed** |
-| Rosbag Telemetry Inspector | `packages/runtime-core/tests/test_rosbag.py` | 2 | **100% Passed** |
-| Session Lifecycle Manager | `packages/runtime-core/tests/test_session.py` | 1 | **100% Passed** |
-| Simulation Adapters | `packages/runtime-core/tests/test_simulators.py` | 3 | **100% Passed** |
-| FastAPI Runtime Endpoints & Sessions | `apps/api/tests/test_runtime_api.py` | 10 | **100% Passed** |
-| CLI Runtime Commands | `packages/cli/tests/test_cli.py` | 4 (11 total) | **100% Passed** |
-| Compatibility Engine | `packages/compat-engine/tests/` | 18 | **100% Passed** |
-| Workspace Generator | `packages/workspace-gen/tests/` | 24 | **100% Passed** |
-| Existing API Endpoints | `apps/api/tests/` | 41 | **100% Passed** |
-| **Total Python Pytest** | `pytest` | **131** | **100% Passed** |
-| Web Runtime Studio Unit (Live API & Demo Mode) | `apps/web/tests/unit/runtime.test.tsx` | 4 | **100% Passed** |
-| **Total Frontend Vitest** | `vitest` | **16** | **100% Passed** |
+| Environment Allowlist & Podman Capabilities | `packages/runtime-core/tests/test_env_allowlist.py` | 2 | **Passed** |
+| Live ROS Graph Collector & Fallbacks | `packages/runtime-core/tests/test_live_collector.py` | 2 | **Passed** |
+| ROS Environment Detector | `packages/runtime-core/tests/test_ros_availability.py` | 2 | **Passed** |
+| Runtime Contract & Type Mismatch | `packages/runtime-core/tests/test_runtime_contract.py` | 3 | **Passed** |
+| Runtime Build Runner | `packages/runtime-core/tests/test_build_runner.py` | 3 | **Passed** |
+| Connection Inspector Dynamic Discovery | `packages/runtime-core/tests/test_connection_inspector.py` | 4 | **Passed** |
+| ROS Graph & QoS Introspection | `packages/runtime-core/tests/test_introspection.py` | 3 | **Passed** |
+| QoS Policy Engine | `packages/runtime-core/tests/test_qos.py` | 3 | **Passed** |
+| Rosbag Telemetry Inspector | `packages/runtime-core/tests/test_rosbag.py` | 2 | **Passed** |
+| Session Lifecycle Manager | `packages/runtime-core/tests/test_session.py` | 1 | **Passed** |
+| Simulation Adapters | `packages/runtime-core/tests/test_simulators.py` | 3 | **Passed** |
+| FastAPI Runtime Endpoints & Sessions | `apps/api/tests/test_runtime_api.py` | 10 | **Passed** |
+| CLI Runtime Commands | `packages/cli/tests/test_cli.py` | 4 (11 total) | **Passed** |
+| Compatibility Engine | `packages/compat-engine/tests/` | 18 | **Passed** |
+| Workspace Generator | `packages/workspace-gen/tests/` | 24 | **Passed** |
+| Existing API Endpoints | `apps/api/tests/` | 41 | **Passed** |
+| **Total Python Pytest** | `pytest` | **131** | **Passed** |
+| Web Runtime Studio Unit (Live API & Demo Mode) | `apps/web/tests/unit/runtime.test.tsx` | 4 | **Passed** |
+| **Total Frontend Vitest** | `vitest` | **16** | **Passed** |
 | Python Code Linting | `ruff check .` | 0 errors | **Passed** |
 | Schema Validation | `scripts/validate_schemas.py` | 5 schemas | **Passed** |
 | Frontend Linting & Build | `next lint && next build` | 7 pages | **Passed** |
