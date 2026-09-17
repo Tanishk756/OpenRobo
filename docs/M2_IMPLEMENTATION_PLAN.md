@@ -1,4 +1,4 @@
-﻿# OpenRobo Milestone 2 — Search Engine & Advanced Taxonomy Indexing Implementation Plan
+# OpenRobo Milestone 2 — Search Engine & Advanced Taxonomy Indexing Implementation Plan
 
 **Milestone:** M2 (Search Engine & Advanced Taxonomy Indexing)  
 **Status:** DRAFT / PLANNED  

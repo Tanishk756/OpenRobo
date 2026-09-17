@@ -1,4 +1,4 @@
-﻿export interface SourceDetail {
+export interface SourceDetail {
   repo_url: string;
   vcs_type?: string;
   branch?: string;

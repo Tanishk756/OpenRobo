@@ -1,4 +1,4 @@
-﻿"""add_search_indexes
+"""add_search_indexes
 
 Revision ID: 0003_search_indexes
 Revises: 0002_resource_metadata

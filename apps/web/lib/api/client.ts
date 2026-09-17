@@ -1,4 +1,4 @@
-﻿import {
+import {
   Resource,
   ResourceListResult,
   ResourceQueryParams,

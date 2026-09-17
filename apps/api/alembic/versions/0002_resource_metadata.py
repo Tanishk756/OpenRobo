@@ -1,4 +1,4 @@
-﻿"""add_resource_metadata
+"""add_resource_metadata
 
 Revision ID: 0002_resource_metadata
 Revises: 0001_initial_schema

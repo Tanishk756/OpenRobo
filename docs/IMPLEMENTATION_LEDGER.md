@@ -1,4 +1,4 @@
-﻿# OpenRobo Implementation Ledger
+# OpenRobo Implementation Ledger
 
 This ledger tracks the implementation, test coverage, verification evidence, and operational status for all architecture requirements across all project milestones.
 

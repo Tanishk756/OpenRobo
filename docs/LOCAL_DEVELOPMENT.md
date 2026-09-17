@@ -1,4 +1,4 @@
-﻿# OpenRobo — Local Development Guide
+# OpenRobo — Local Development Guide
 
 This guide covers setup and daily development workflows on both **Windows** (PowerShell / Command Prompt) and **Linux/macOS** (Bash / Make).
 

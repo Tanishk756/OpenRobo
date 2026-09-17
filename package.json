@@ -4,6 +4,7 @@
   "private": true,
   "description": "OpenRobo — Open-source robotics commons platform",
   "license": "Apache-2.0",
+  "packageManager": "pnpm@12.4.2",
   "scripts": {
     "dev": "pnpm --parallel run dev",
     "dev:web": "pnpm --filter openrobo-web run dev",
@@ -22,6 +23,7 @@
     "check": "pnpm run lint && pnpm run validate && pnpm run test && pnpm run build"
   },
   "devDependencies": {
+    "jsdom": "^24.0.0",
     "prettier": "^3.2.5"
   }
 }

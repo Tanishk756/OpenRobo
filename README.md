@@ -4,6 +4,7 @@
 
 **Open-source robotics platform for discovering components, reasoning about compatibility, building robot stacks, and generating reproducible developer environments.**
 
+[![OpenRobo CI](https://github.com/Tanishk756/OpenRobo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Tanishk756/OpenRobo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Python-3.10%20|%203.11%20|%203.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -101,8 +102,8 @@ OpenRobo/
 ## Quick Start
 
 ### Prerequisites
-- **Node.js**: `v18+` or `v20+`
-- **pnpm**: `v8+` or `v9+`
+- **Node.js**: `v18+`, `v20+`, or `v24+`
+- **pnpm**: `v12+` (or `v8+`/`v9+`)
 - **Python**: `3.10`, `3.11`, or `3.12`
 
 ### 1. Install Dependencies

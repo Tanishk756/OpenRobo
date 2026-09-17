@@ -1,4 +1,4 @@
-﻿# Milestone 3 Implementation Plan: Knowledge Graph & Compatibility Intelligence
+# Milestone 3 Implementation Plan: Knowledge Graph & Compatibility Intelligence
 
 ## Objective
 Implement **Milestone 3 — Knowledge Graph, Compatibility Intelligence & Constraint Reasoning** in OpenRobo. Build the reasoning engine that evaluates whether robotics packages, drivers, algorithms, hardware interfaces, and platform environments can function together without breaking.

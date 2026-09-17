@@ -1,4 +1,4 @@
-﻿# Milestone 2 Verification Report: Search Engine & Advanced Taxonomy Indexing
+# Milestone 2 Verification Report: Search Engine & Advanced Taxonomy Indexing
 
 ## Executive Summary
 - **Milestone**: Milestone 2 — Search Engine & Advanced Taxonomy Indexing
