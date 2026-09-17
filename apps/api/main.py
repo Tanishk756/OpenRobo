@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from apps.api.database import Base, engine
-from apps.api.routers import compatibility, graph, health, ingestion, resources, search
+from apps.api.routers import compatibility, graph, health, ingestion, resources, search, stacks
 from apps.api.security import SecurityHeadersMiddleware
 
 
@@ -58,6 +58,7 @@ app.include_router(search.router, prefix="/api/v1")
 app.include_router(graph.router, prefix="/api/v1")
 app.include_router(compatibility.router, prefix="/api/v1")
 app.include_router(ingestion.router, prefix="/api/v1")
+app.include_router(stacks.router, prefix="/api/v1")
 
 
 @app.get("/", include_in_schema=False)
