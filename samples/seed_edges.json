@@ -1,0 +1,97 @@
+[
+  {
+    "subject_id": "ros-navigation/nav2",
+    "predicate": "depends-on",
+    "object_id": "ros-controls/ros2_control",
+    "properties": {
+      "min_version": "2.0.0",
+      "version_constraint": ">=2.0.0"
+    }
+  },
+  {
+    "subject_id": "ros-navigation/nav2",
+    "predicate": "compatible-with",
+    "object_id": "stevemacenski/slam_toolbox",
+    "properties": {
+      "evidence_level": "ci_verified",
+      "tested_ros": [
+        "humble",
+        "jazzy"
+      ]
+    }
+  },
+  {
+    "subject_id": "ros-navigation/nav2",
+    "predicate": "tested-with",
+    "object_id": "robotis/turtlebot3",
+    "properties": {
+      "evidence_level": "vendor_tested",
+      "platform": "ubuntu-24.04"
+    }
+  },
+  {
+    "subject_id": "robotis/turtlebot3",
+    "predicate": "depends-on",
+    "object_id": "ros-navigation/nav2",
+    "properties": {
+      "version_constraint": "^1.0.0"
+    }
+  },
+  {
+    "subject_id": "robotis/turtlebot3",
+    "predicate": "tested-with",
+    "object_id": "gazebosim/gz-sim",
+    "properties": {
+      "evidence_level": "vendor_tested"
+    }
+  },
+  {
+    "subject_id": "stevemacenski/slam_toolbox",
+    "predicate": "tested-with",
+    "object_id": "robotis/turtlebot3",
+    "properties": {
+      "evidence_level": "vendor_tested"
+    }
+  },
+  {
+    "subject_id": "intel-realsense/realsense-ros",
+    "predicate": "compatible-with",
+    "object_id": "ros-navigation/nav2",
+    "properties": {
+      "evidence_level": "ci_verified"
+    }
+  },
+  {
+    "subject_id": "intel-realsense/realsense-ros",
+    "predicate": "tested-with",
+    "object_id": "robotis/turtlebot3",
+    "properties": {
+      "evidence_level": "vendor_tested"
+    }
+  },
+  {
+    "subject_id": "universal-robots/universal_robots_ros2_driver",
+    "predicate": "depends-on",
+    "object_id": "ros-controls/ros2_control",
+    "properties": {
+      "version_constraint": ">=2.0.0"
+    }
+  },
+  {
+    "subject_id": "universal-robots/universal_robots_ros2_driver",
+    "predicate": "tested-with",
+    "object_id": "ros-planning/moveit2",
+    "properties": {
+      "evidence_level": "vendor_tested"
+    }
+  },
+  {
+    "subject_id": "eclipse-cyclonedds/cyclonedds",
+    "predicate": "conflicts-with",
+    "object_id": "eprosima/fast-dds",
+    "properties": {
+      "reason": "Default RMW middleware collision in shared ROS 2 workspace environment.",
+      "evidence_level": "ci_verified"
+    }
+  }
+]

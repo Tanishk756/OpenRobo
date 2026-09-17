@@ -2,13 +2,15 @@ import asyncio
 import json
 from pathlib import Path
 
-from openrobo_schemas import validate_resource_manifest
+from openrobo_schemas import validate_graph_edge, validate_resource_manifest
 
 from apps.api.database import AsyncSessionLocal, Base, engine
+from apps.api.models.graph import GraphEdgeModel, GraphNodeModel
 from apps.api.models.resource import ResourceModel, ResourceVersionModel
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLES_FILE = ROOT / "samples" / "seed_resources.json"
+EDGES_FILE = ROOT / "samples" / "seed_edges.json"
 
 
 async def seed_database():
@@ -48,6 +50,7 @@ async def seed_database():
                     "source": item.get("source", {}),
                     "license": item.get("license", {}),
                     "evidence": item.get("evidence", {}),
+                    "platforms": item.get("platforms", {}),
                 }
             else:
                 print(f"  [INSERT] {item['id']}")
@@ -67,16 +70,56 @@ async def seed_database():
                         "source": item.get("source", {}),
                         "license": item.get("license", {}),
                         "evidence": item.get("evidence", {}),
+                        "platforms": item.get("platforms", {}),
                     },
                 )
                 session.add(res)
 
                 version_entry = ResourceVersionModel(
-                    id=item["id"] + "@" + item["version"], resource_id=item["id"], version_string=item["version"], manifest_json=item
+                    id=item["id"] + "@" + item["version"],
+                    resource_id=item["id"],
+                    version_string=item["version"],
+                    manifest_json=item,
                 )
                 session.add(version_entry)
 
+            # Ensure node in graph_nodes
+            gnode = await session.get(GraphNodeModel, item["id"])
+            if not gnode:
+                session.add(GraphNodeModel(id=item["id"], node_type=item["type"]))
+
         await session.commit()
+
+        # Seed graph edges if present
+        if EDGES_FILE.exists():
+            with open(EDGES_FILE, "r", encoding="utf-8") as f:
+                edges_data = json.load(f)
+            print(f"Seeding {len(edges_data)} canonical knowledge graph edges...")
+            for edge in edges_data:
+                valid, errors = validate_graph_edge(edge)
+                if not valid:
+                    print(f"  [SKIP] Invalid edge: {edge} - {errors}")
+                    continue
+
+                sub_node = await session.get(GraphNodeModel, edge["subject_id"])
+                if not sub_node:
+                    session.add(GraphNodeModel(id=edge["subject_id"], node_type="resource"))
+                obj_node = await session.get(GraphNodeModel, edge["object_id"])
+                if not obj_node:
+                    session.add(GraphNodeModel(id=edge["object_id"], node_type="resource"))
+                await session.flush()
+
+                # Check if edge already exists
+                edge_entry = GraphEdgeModel(
+                    subject_id=edge["subject_id"],
+                    predicate=edge["predicate"],
+                    object_id=edge["object_id"],
+                    properties_json=edge.get("properties"),
+                )
+                session.add(edge_entry)
+
+            await session.commit()
+
     print("Database seeding completed successfully.")
 
 

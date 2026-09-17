@@ -8,10 +8,11 @@ version = "0.1.0"
 description = "OpenRobo Knowledge Graph & Compatibility Reasoning Engine"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "Apache-2.0"
+license = { text = "Apache-2.0" }
 dependencies = [
     "networkx>=3.2.1",
-    "pydantic>=2.6.0"
+    "pydantic>=2.6.0",
+    "packaging>=23.0"
 ]
 
 [tool.setuptools.packages.find]
