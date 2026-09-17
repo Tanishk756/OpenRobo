@@ -107,3 +107,13 @@ packages/runtime-core/openrobo_runtime/
 | **Live ROS Graph Introspection** | Host ROS 2 daemon offline | `NOT EXECUTED â€” Live ROS 2 runtime unavailable` |
 | **Gazebo Simulator Runtime** | `gz sim` executable not found in host PATH | `NOT EXECUTED â€” Gazebo CLI unavailable` |
 | **Connection Inspector Tool** | `ros2 pkg prefix connection_inspector` not found | `NOT EXECUTED â€” connection_inspector unavailable locally` |
+---
+
+## 6. Milestone 6.1 Truthful Readiness & Live Wiring Update
+
+Milestone 6.1 built directly upon M6 architecture to ensure that:
+1. No synthetic or hardcoded demo states are presented as live verification in the Runtime Studio UI.
+2. An explicit `DEMO DATA` toggle is available for offline demonstrations.
+3. The live ROS graph collector dynamically checks for `rclpy` and falls back safely to CLI without crashing on non-ROS developer hosts.
+4. Stack contracts (`RuntimeContract`) explicitly declare expected nodes, topics, and transform chains, removing speculative name guessing.
+5. All detailed empirical evidence and safety controls are cataloged in `docs/M6_LIVE_RUNTIME_REPORT.md`.

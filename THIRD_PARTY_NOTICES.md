@@ -27,3 +27,6 @@ OpenRobo integrates with robotics simulation environments via command-line adapt
 - **Gazebo (Harmonic / Fortress)**: Apache-2.0 / Open Source Robotics Foundation (OSRF)
 - **Webots**: Apache-2.0 / Cyberbotics
 - **MuJoCo**: Apache-2.0 / Google DeepMind
+## Connection Inspector Tool Boundary Notice (M6.1)
+
+OpenRobo interacts with external ROS 2 tools such as `connection_inspector` strictly as separate operating system processes via standardized command-line interfaces. No source code or GPL libraries are linked, embedded, or bundled within OpenRobo. All process invocations require explicit user action and adhere to process boundary isolation.

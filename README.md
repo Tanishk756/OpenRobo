@@ -44,7 +44,8 @@ Robotics software engineering is fragmented across hundreds of isolated reposito
 - [x] **Optional Connection Inspector Integration (Milestone 6)**: External tool adapter safely detecting installed `connection_inspector` ROS 2 packages (`inspect_cli`, GUI) via process boundary while strictly isolating GPL-3.0 upstream code from OpenRobo's Apache-2.0 core.
 - [x] **Robotics Simulation Adapters (Milestone 6)**: Unified simulation interface (`SimulationAdapter`) with environment detection for Gazebo (Harmonic/Fortress), Webots, and MuJoCo.
 - [x] **Rosbag2 Telemetry Foundation (Milestone 6)**: Metadata and topic message count introspection for SQLite3 rosbag datasets.
-- [x] **Runtime Studio Web UI (`/runtime`) (Milestone 6)**: Interactive robotics dashboard visualizing execution provider states, simulator readiness, ROS 2 computational graph connections, node health, and QoS diagnostics.
+- [x] **Runtime Studio Web UI (`/runtime`) (Milestone 6 & 6.1)**: Interactive robotics dashboard visualizing execution provider states, simulator readiness, ROS 2 computational graph connections, node health, QoS diagnostics, explicit Demo Mode toggle, and real backend API streaming.
+- [x] **Live Runtime Wiring & Truthful Verification (Milestone 6.1)**: Guarded ROS 2 graph collector (`rclpy` & CLI fallback), `RuntimeContract` explicit verification, `TYPE_MISMATCH` detection, LocalProcessProvider environment allowlist, and path traversal containment.
 - [x] **Unified CLI**: Typer/Rich command-line suite for schema validation, static GitHub ingestion, ranked registry search, workspace generation (`openrobo workspace`), and runtime verification (`openrobo runtime`).
 - [x] **Cross-Platform Compatibility**: Full first-class support for Linux, macOS, and Windows development workflows.
 
