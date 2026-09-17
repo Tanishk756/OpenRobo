@@ -1,5 +1,11 @@
 from apps.api.database import Base
 
+from .fleet import (
+    AgentEnrollmentTokenModel,
+    AgentHeartbeatModel,
+    AgentTelemetryEventModel,
+    FleetDeviceModel,
+)
 from .graph import GraphEdgeModel, GraphNodeModel
 from .resource import (
     CapabilityModel,
@@ -20,4 +26,8 @@ __all__ = [
     "StackModel",
     "GraphNodeModel",
     "GraphEdgeModel",
+    "FleetDeviceModel",
+    "AgentEnrollmentTokenModel",
+    "AgentHeartbeatModel",
+    "AgentTelemetryEventModel",
 ]

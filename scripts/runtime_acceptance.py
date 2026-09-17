@@ -47,10 +47,11 @@ def compute_dir_sha256(directory: Path) -> str:
     return hasher.hexdigest()
 
 
-def run_cmd(cmd, env=None, timeout=15):
+def run_cmd(cmd_list, cwd=None, env=None, timeout=15):
+    """Run structured command list without shell=True."""
     p = subprocess.run(
-        cmd,
-        shell=True,
+        cmd_list,
+        cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -151,8 +152,8 @@ def main():
 
         time.sleep(3.0)
 
-        code, out_nodes, _ = run_cmd("ros2 node list", env=env)
-        code, out_topics, _ = run_cmd("ros2 topic list", env=env)
+        code, out_nodes, _ = run_cmd(["ros2", "node", "list"], env=env)
+        code, out_topics, _ = run_cmd(["ros2", "topic", "list"], env=env)
         print(f"  Native ros2 node list:\n{out_nodes}")
         print(f"  Native ros2 topic list:\n{out_topics}")
 
@@ -308,21 +309,29 @@ rclpy.spin(node)
 
         time.sleep(3.0)
 
+        # Collect live ROS graph and extract actual observed endpoint QoS metadata
         collector = LiveRosGraphCollector()
         qos_graph = collector.collect()
         topics = qos_graph.get("topics", [])
         qos_topic = next((t for t in topics if t.get("name") == "/qos_test_topic"), None)
-        print(f"  Observed /qos_test_topic metadata: {qos_topic}")
+        print(f"  Observed live /qos_test_topic metadata from collector: {qos_topic}")
+        assert qos_topic is not None, "Failed to observe /qos_test_topic in live graph"
+
+        # Pass the extracted live observed QoS dictionaries directly into QoSEvaluator
+        pub_qos = qos_topic.get("publisher_qos", {})
+        sub_qos = qos_topic.get("subscriber_qos", {})
+        print(f"  Extracted live publisher QoS:  {pub_qos}")
+        print(f"  Extracted live subscriber QoS: {sub_qos}")
 
         evaluator = QoSEvaluator()
-        pub_qos = {"reliability": "BEST_EFFORT", "durability": "VOLATILE"}
-        sub_qos = {"reliability": "RELIABLE", "durability": "VOLATILE"}
         compat, reason = evaluator.evaluate_compatibility(pub_qos, sub_qos)
         print(f"  QoS Evaluation: {compat} ({reason})")
         assert compat == QoSPolicyCompatibility.INCOMPATIBLE, f"Expected INCOMPATIBLE, got {compat}"
 
         evidence["phases"]["phase_6_qos_test"] = {
-            "topic_detected": qos_topic is not None,
+            "topic_detected": True,
+            "publisher_qos": pub_qos,
+            "subscriber_qos": sub_qos,
             "evaluation": str(compat),
             "reason": reason,
         }
@@ -366,15 +375,17 @@ rclpy.spin(node)
 
     # PHASE 8
     print("\n[PHASE 8] Probing Gazebo Simulator...")
-    gz_code, gz_out, gz_err = run_cmd("which gz || which ign || true")
-    gz_ver_code, gz_ver_out, _ = run_cmd("gz sim --version || ign gazebo --version || true")
-    print(f"  Gazebo Binary:  {gz_out}")
+    gz_binary = shutil.which("gz") or shutil.which("ign")
+    gz_ver_out = ""
+    if gz_binary:
+        code, gz_ver_out, _ = run_cmd([gz_binary, "sim", "--version"])
+    print(f"  Gazebo Binary:  {gz_binary}")
     print(f"  Gazebo Version: {gz_ver_out}")
 
     evidence["phases"]["phase_8_gazebo"] = {
-        "binary": gz_out,
+        "binary": gz_binary,
         "version": gz_ver_out,
-        "detected": bool(gz_out),
+        "detected": bool(gz_binary),
     }
 
     # PHASE 9
@@ -386,13 +397,15 @@ rclpy.spin(node)
     src_dir = fixture_dir / "src" / "openrobo_bringup"
     src_dir.mkdir(parents=True, exist_ok=True)
 
+    # Note: openrobo-test@example.com is an RFC 2606 reserved test address used solely for fixture validation
     (src_dir / "package.xml").write_text("""<?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>openrobo_bringup</name>
   <version>1.0.0</version>
-  <description>OpenRobo Acceptance Fixture Package</description>
-  <maintainer email="developer@openrobo.io">OpenRobo Maintainer</maintainer>
+  <description>OpenRobo Acceptance Fixture Package (Test Only)</description>
+  <!-- Explicit test fixture maintainer per RFC 2606 -->
+  <maintainer email="openrobo-test@example.com">OpenRobo Test Maintainer</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -419,7 +432,8 @@ ament_package()
 
     build_start = time.time()
     colcon_code, colcon_out, colcon_err = run_cmd(
-        f"cd {fixture_dir} && colcon build",
+        ["colcon", "build"],
+        cwd=fixture_dir,
         env=env,
         timeout=120,
     )
@@ -439,8 +453,11 @@ ament_package()
 
     # PHASE 10
     print("\n[PHASE 10] Checking Docker Availability...")
-    docker_code, docker_ver, docker_err = run_cmd("docker version --format '{{.Server.Version}}' || true")
-    docker_avail = (docker_code == 0 and bool(docker_ver.strip()))
+    docker_bin = shutil.which("docker")
+    docker_avail = False
+    if docker_bin:
+        code, out, _ = run_cmd([docker_bin, "version", "--format", "{{.Server.Version}}"])
+        docker_avail = (code == 0 and bool(out.strip()))
     print(f"  Docker Daemon Available: {docker_avail}")
 
     evidence["phases"]["phase_10_docker"] = {

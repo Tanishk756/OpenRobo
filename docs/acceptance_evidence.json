@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-09-17T13:35:04Z",
+  "timestamp_utc": "2026-09-17T14:20:07Z",
   "os": "linux",
   "python_version": "3.10.12",
   "phases": {
@@ -27,7 +27,7 @@
       "nodes": [
         "talker",
         "listener",
-        "_ros2cli_daemon_42_5de3234c983249798e2757e335b0754a"
+        "_ros2cli_daemon_42_4456b032b85c4ef0baf8585ac0e1c5c7"
       ],
       "topics": [
         "/chatter",
@@ -47,6 +47,18 @@
     },
     "phase_6_qos_test": {
       "topic_detected": true,
+      "publisher_qos": {
+        "reliability": "BEST_EFFORT",
+        "durability": "VOLATILE",
+        "history": "UNKNOWN",
+        "depth": "0"
+      },
+      "subscriber_qos": {
+        "reliability": "RELIABLE",
+        "durability": "VOLATILE",
+        "history": "UNKNOWN",
+        "depth": "0"
+      },
       "evaluation": "QoSPolicyCompatibility.INCOMPATIBLE",
       "reason": "Incompatible Reliability: Publisher offers BEST_EFFORT but Subscriber requests RELIABLE."
     },
@@ -70,13 +82,13 @@
     "phase_9_colcon_build": {
       "status": "BUILD_VERIFIED",
       "exit_code": 0,
-      "duration_sec": 2.8,
-      "workspace_digest": "5418a3f40db21d75be60ef75b68cfe81ee619b2362e13bec3bf74c045206dbad",
+      "duration_sec": 2.84,
+      "workspace_digest": "503fb390a0e3a30f2e91c65bb3526e3bb5ef7d5eec1d4b9b9eec129401237623",
       "distro": "humble"
     },
     "phase_10_docker": {
-      "daemon_available": true,
-      "status": "DOCKER_AVAILABLE"
+      "daemon_available": false,
+      "status": "NOT_EXECUTED"
     }
   },
   "verdict": "RUNTIME_VERIFIED"

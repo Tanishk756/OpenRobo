@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openrobo-agent"
+version = "0.7.0"
+description = "OpenRobo Secure Remote Edge Agent and Device Identity Subsystem"
+readme = "README.md"
+authors = [{ name = "Tanishk Singhal" }]
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0.0",
+    "cryptography>=42.0.0",
+    "openrobo-runtime>=0.6.1",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
