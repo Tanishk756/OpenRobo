@@ -1,10 +1,10 @@
-﻿# Milestone 5.1 — Generator Trust, Safety & Deployment Hardening Report
+# Milestone 5.1 - Generator Trust, Safety & Deployment Hardening Report
 
-**Milestone:** M5.1 — Generator Trust, Safety & Deployment Hardening  
-**Project:** OpenRobo  
-**Owner / Maintainer:** Tanishk Singhal  
-**Date:** September 17, 2026  
-**Status:** COMPLETED & VERIFIED ✅  
+**Milestone:** M5.1 - Generator Trust, Safety & Deployment Hardening
+**Project:** OpenRobo
+**Owner / Maintainer:** Tanishk Singhal
+**Date:** September 17, 2026
+**Status:** COMPLETED & VERIFIED âœ…
 
 ---
 
@@ -12,7 +12,7 @@
 
 Milestone 5.1 is a focused, rigorous trust and safety hardening pass on the OpenRobo Workspace Generator (`packages/workspace-gen`). Guided by the foundational principle:
 
-> **NO EVIDENCE → NO INVENTED CONFIGURATION**
+> **NO EVIDENCE â†’ NO INVENTED CONFIGURATION**
 
 The generator now deterministically differentiates:
 1. **`VERIFIED_ADAPTER`**: Canonical, tested adapters (Nav2, SLAM Toolbox, ros2_control, Gazebo) registered with exact canonical IDs.
@@ -88,4 +88,12 @@ The generator now deterministically differentiates:
 ## 4. Real Build Verification Status
 
 - **Docker Version Check**: Docker CLI v29.7.2 present; Docker Desktop daemon offline on host.
-- **Recorded Status**: `NOT EXECUTED — Docker daemon unavailable`.
+- **Recorded Status**: `NOT EXECUTED â€” Docker daemon unavailable`.
+
+---
+
+## 5. Git Commit Provenance
+
+- **Feature Branch**: `feature/m5.1-generator-hardening`
+- **Feature PR Head SHA**: `13681381683ad4a6a70f2c321830a49d4d6531d6`
+- **Main Merge Commit SHA**: `4d47992e1c4c6d1d2184e7dcc014b28b3f85a91e`

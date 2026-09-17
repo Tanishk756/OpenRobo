@@ -9,14 +9,16 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from openrobo_cli.runtime import runtime_app
 from openrobo_cli.workspace import workspace_app
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
-app = typer.Typer(name="openrobo", help="OpenRobo CLI — Open-Source Global Robotics Commons Tool", add_completion=False)
+app = typer.Typer(name="openrobo", help="OpenRobo CLI - Open-Source Global Robotics Commons Tool", add_completion=False)
 ingest_app = typer.Typer(name="ingest", help="Ingest open-source robotics repositories into OpenRobo manifests", add_completion=False)
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(workspace_app, name="workspace")
+app.add_typer(runtime_app, name="runtime")
 
 console = Console()
 
@@ -41,7 +43,7 @@ def common(
 
 @app.command("search")
 def search(
-    query: Optional[str] = typer.Argument(None, help="Search terms (e.g. 'nav2', 'slam', 'realsense')"),
+    query: Optional[str] = typer.Argument(None, help="Search query string across names, summaries, domains, and capabilities"),
     resource_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by resource type"),
     domain: Optional[str] = typer.Option(None, "--domain", "-d", help="Filter by robotics domain"),
     capability: Optional[str] = typer.Option(None, "--capability", "-c", help="Filter by capability"),
