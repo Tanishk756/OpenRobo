@@ -21,8 +21,7 @@ search_service = SearchService()
     status_code=status.HTTP_200_OK,
     summary="Ranked Full-Text & Fuzzy Robotics Search",
     description=(
-        "Searches the OpenRobo registry using weighted full-text and fuzzy "
-        "trigram relevance matching with multi-taxonomy faceting."
+        "Searches the OpenRobo registry using weighted full-text and fuzzy trigram relevance matching with multi-taxonomy faceting."
     ),
 )
 async def search_resources(
@@ -61,8 +60,7 @@ async def search_resources(
     status_code=status.HTTP_200_OK,
     summary="Aggregate Search Taxonomy Facets",
     description=(
-        "Computes global or query-specific category facet counts across "
-        "types, domains, capabilities, licenses, and ROS versions."
+        "Computes global or query-specific category facet counts across types, domains, capabilities, licenses, and ROS versions."
     ),
 )
 async def get_search_facets(
