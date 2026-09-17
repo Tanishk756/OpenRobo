@@ -1,0 +1,83 @@
+{
+  "timestamp_utc": "2026-09-17T13:35:04Z",
+  "os": "linux",
+  "python_version": "3.10.12",
+  "phases": {
+    "phase_1_env": {
+      "status": "RosEnvironmentStatus.AVAILABLE",
+      "distro": "humble",
+      "rmw": null,
+      "rclpy": true,
+      "ros2_cli": true,
+      "domain_id": 42
+    },
+    "phase_2_graph_spawn": {
+      "native_nodes": [
+        "/listener",
+        "/talker"
+      ],
+      "native_topics": [
+        "/chatter",
+        "/parameter_events",
+        "/rosout"
+      ]
+    },
+    "phase_3_live_collector": {
+      "status": "COLLECTED_VIA_RCLPY",
+      "nodes": [
+        "talker",
+        "listener",
+        "_ros2cli_daemon_42_5de3234c983249798e2757e335b0754a"
+      ],
+      "topics": [
+        "/chatter",
+        "/parameter_events",
+        "/rosout"
+      ]
+    },
+    "phase_4_contract_healthy": {
+      "overall_status": "OverallHealthStatus.HEALTHY",
+      "readiness_state": "ReadinessState.RUNTIME_VERIFIED",
+      "missing_nodes": [],
+      "summary": "Runtime verified: 3 nodes fulfilling runtime contract."
+    },
+    "phase_5_intentional_failures": {
+      "missing_node_detected": true,
+      "type_mismatch_detected": true
+    },
+    "phase_6_qos_test": {
+      "topic_detected": true,
+      "evaluation": "QoSPolicyCompatibility.INCOMPATIBLE",
+      "reason": "Incompatible Reliability: Publisher offers BEST_EFFORT but Subscriber requests RELIABLE."
+    },
+    "phase_7_connection_inspector": {
+      "status": "ConnectionInspectorStatus.INSTALLED",
+      "installed": true,
+      "version": "1.0.1",
+      "distro_supported": "DistroReleaseSupport.UNKNOWN",
+      "executables": [
+        "inspect_cli",
+        "connection_inspector"
+      ],
+      "cli_executed": false,
+      "cli_exit_code": 0
+    },
+    "phase_8_gazebo": {
+      "binary": "/usr/bin/gz",
+      "version": "Gazebo Sim, version 8.15.0\nCopyright (C) 2018 Open Source Robotics Foundation.\nReleased under the Apache 2.0 License.",
+      "detected": true
+    },
+    "phase_9_colcon_build": {
+      "status": "BUILD_VERIFIED",
+      "exit_code": 0,
+      "duration_sec": 2.8,
+      "workspace_digest": "5418a3f40db21d75be60ef75b68cfe81ee619b2362e13bec3bf74c045206dbad",
+      "distro": "humble"
+    },
+    "phase_10_docker": {
+      "daemon_available": true,
+      "status": "DOCKER_AVAILABLE"
+    }
+  },
+  "verdict": "RUNTIME_VERIFIED"
+}

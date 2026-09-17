@@ -3,6 +3,7 @@
 import logging
 import shutil
 import subprocess
+import time
 from typing import Any, Dict, List, Optional
 
 from openrobo_runtime.ros.availability import RosEnvironmentDetector
@@ -58,6 +59,11 @@ class LiveRosGraphCollector:
 
         temp_node = Node("_openrobo_graph_collector")
         try:
+            # Allow DDS discovery to sync
+            for _ in range(5):
+                rclpy.spin_once(temp_node, timeout_sec=0.1)
+                time.sleep(0.1)
+
             # 1. Get nodes and namespaces
             node_names_and_ns = temp_node.get_node_names_and_namespaces()
             nodes: List[Dict[str, Any]] = []
@@ -92,8 +98,13 @@ class LiveRosGraphCollector:
             for topic_name, type_list in topic_names_and_types:
                 primary_type = type_list[0] if type_list else "unknown"
 
-                pubs_info = temp_node.get_publishers_info_by_topic(topic_name)
-                subs_info = temp_node.get_subscribers_info_by_topic(topic_name)
+                pubs_fn = getattr(temp_node, "get_publishers_info_by_topic", None)
+                pubs_info = pubs_fn(topic_name) if pubs_fn else []
+
+                subs_fn = getattr(temp_node, "get_subscriptions_info_by_topic", None) or getattr(
+                    temp_node, "get_subscribers_info_by_topic", None
+                )
+                subs_info = subs_fn(topic_name) if subs_fn else []
 
                 pub_names = [p.node_name for p in pubs_info]
                 sub_names = [s.node_name for s in subs_info]
