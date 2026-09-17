@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openrobo-workspace"
+version = "0.1.0"
+description = "OpenRobo Robotics Workspace & Deployment Generator"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "pydantic>=2.6.0",
+    "openrobo-schemas",
+    "openrobo-compat",
+    "pyyaml>=6.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project.optional-dependencies]
+test = ["pytest"]
