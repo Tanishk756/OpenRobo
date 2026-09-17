@@ -337,3 +337,99 @@ export interface WorkspaceRequest {
   manifest?: Record<string, unknown>;
   allow_incompatible?: boolean;
 }
+
+// ==========================================
+// Milestone 6 & 6.1: Live Runtime & Verification Models
+// ==========================================
+
+export type RosEnvironmentStatus = 'AVAILABLE' | 'UNAVAILABLE' | 'MISCONFIGURED';
+
+export interface RosEnvironmentInfo {
+  status: RosEnvironmentStatus;
+  ros_distro?: string | null;
+  ros_version?: number | null;
+  rmw_implementation?: string | null;
+  ros_domain_id?: number | null;
+  rclpy_available: boolean;
+  ros2_cli_available: boolean;
+  installation_prefix?: string | null;
+  details?: string | null;
+}
+
+export type DistroReleaseSupport = 'VERIFIED_RELEASE' | 'UNKNOWN' | 'UNSUPPORTED';
+
+export interface ConnectionInspectorReport {
+  status: 'AVAILABLE' | 'NOT_INSTALLED' | 'UNKNOWN_DISTRO' | 'EXECUTION_FAILED' | 'MISSING_EXECUTABLE';
+  version?: string | null;
+  distro?: string | null;
+  release_support?: DistroReleaseSupport;
+  executables: string[];
+  licensing_notice: string;
+  details?: string | null;
+}
+
+export interface ExecutionProviderInfo {
+  provider_type: string;
+  status: 'AVAILABLE' | 'UNAVAILABLE' | 'DETECTED_NOT_IMPLEMENTED';
+  details?: string;
+  supports_build_verification?: boolean;
+}
+
+export interface SimulatorInfo {
+  simulator: string;
+  installed: boolean;
+  version?: string | null;
+  details?: string | null;
+}
+
+export interface NodeHealth {
+  name: string;
+  namespace: string;
+  full_name?: string;
+  is_present: boolean;
+  is_alive: boolean;
+  pid?: number | null;
+  publisher_topics: string[];
+  subscriber_topics: string[];
+  services: string[];
+  actions: string[];
+}
+
+export interface ConnectionDiagnostic {
+  topic: string;
+  topic_type: string;
+  status: string;
+  publishers: string[];
+  subscribers: string[];
+  rate_hz?: number | null;
+  qos_status: string;
+  qos_mismatch_reason?: string | null;
+}
+
+export interface RuntimeVerificationResult {
+  verified: boolean;
+  contract_evaluated: boolean;
+  status: 'RUNTIME_VERIFIED' | 'RUNTIME_FAILED' | 'RUNTIME_NOT_EXECUTED' | 'NO_CONTRACT_SPECIFIED';
+  missing_nodes: string[];
+  missing_topics: string[];
+  type_mismatches: any[];
+  qos_incompatibilities: any[];
+  tf_warnings: string[];
+  details: string;
+}
+
+export interface RuntimeSession {
+  id: string;
+  stack_id: string;
+  workspace_digest: string;
+  provider: string;
+  ros_distro?: string | null;
+  ros_domain_id?: number | null;
+  status: 'PENDING' | 'RUNNING' | 'STOPPED' | 'FAILED';
+  started_at: string;
+  stopped_at?: string | null;
+  build_verification_id?: string | null;
+  simulation_adapter?: string | null;
+}
+
+export type ProviderInfo = ExecutionProviderInfo;

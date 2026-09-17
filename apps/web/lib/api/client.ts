@@ -18,6 +18,12 @@ import {
   StackValidationResponse,
   WorkspacePreviewResponse,
   WorkspaceRequest,
+  ExecutionProviderInfo,
+  RosEnvironmentInfo,
+  ConnectionInspectorReport,
+  SimulatorInfo,
+  RuntimeVerificationResult,
+  RuntimeSession,
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -474,5 +480,100 @@ export async function downloadWorkspaceZip(req: WorkspaceRequest): Promise<Blob>
   } catch (err: any) {
     if (err instanceof ApiError) throw err;
     throw new ApiError('Unable to download workspace archive.', undefined, true);
+  }
+}
+export async function fetchProviders(): Promise<Record<string, ExecutionProviderInfo>> {
+  const url = `${API_BASE_URL}/api/v1/runtime/providers`;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new ApiError(`Providers fetch failed: ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to connect to OpenRobo Runtime API.', undefined, true);
+  }
+}
+
+export async function fetchRosEnvironment(): Promise<RosEnvironmentInfo> {
+  const url = `${API_BASE_URL}/api/v1/runtime/environment`;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new ApiError(`Environment fetch failed: ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to detect ROS environment.', undefined, true);
+  }
+}
+
+export async function fetchConnectionInspector(distro?: string): Promise<ConnectionInspectorReport> {
+  const query = distro ? `?distro=${encodeURIComponent(distro)}` : '';
+  const url = `${API_BASE_URL}/api/v1/runtime/connection-inspector${query}`;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new ApiError(`Connection Inspector status failed: ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to inspect Connection Inspector tool.', undefined, true);
+  }
+}
+
+export async function fetchSimulators(): Promise<Record<string, SimulatorInfo>> {
+  const url = `${API_BASE_URL}/api/v1/runtime/simulators`;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new ApiError(`Simulators fetch failed: ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to inspect simulation adapters.', undefined, true);
+  }
+}
+
+export async function fetchLiveGraph(): Promise<{ status: string; nodes: any[]; topics: any[] }> {
+  const url = `${API_BASE_URL}/api/v1/runtime/introspection/live`;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new ApiError(`Live graph collection failed: ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to query live ROS graph.', undefined, true);
+  }
+}
+
+export async function compareRuntimeGraph(payload: {
+  planned_manifest: Record<string, unknown>;
+  observed_nodes?: any[];
+  observed_topics?: any[];
+  observed_tfs?: any[];
+  runtime_contract?: any;
+}): Promise<RuntimeVerificationResult> {
+  const url = `${API_BASE_URL}/api/v1/runtime/introspection/compare`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new ApiError(`Comparison failed: ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to compare runtime graph.', undefined, true);
+  }
+}
+
+export async function fetchRuntimeSessions(): Promise<RuntimeSession[]> {
+  const url = `${API_BASE_URL}/api/v1/runtime/sessions`;
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new ApiError(`Sessions fetch failed: ${res.status}`, res.status);
+    return await res.json();
+  } catch (err: any) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('Unable to fetch runtime sessions.', undefined, true);
   }
 }

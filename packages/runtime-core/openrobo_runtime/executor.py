@@ -1,4 +1,4 @@
-"""Build Verification Executor (Milestone 6)."""
+﻿"""Build Verification Executor (Milestone 6.1)."""
 
 import hashlib
 import os
@@ -26,7 +26,15 @@ class BuildRunner:
         requested_provider: Optional[ExecutionProviderType] = None,
         timeout_sec: int = 300,
     ) -> BuildVerificationResult:
-        if not os.path.exists(workspace_dir):
+        # Path validation
+        if not workspace_dir or "\0" in workspace_dir:
+            return BuildVerificationResult(
+                status=BuildStatus.FAILED,
+                errors=["Invalid workspace path: contains null byte or is empty."],
+            )
+
+        real_ws_path = os.path.realpath(workspace_dir)
+        if not os.path.exists(real_ws_path) or not os.path.isdir(real_ws_path):
             return BuildVerificationResult(
                 status=BuildStatus.FAILED,
                 errors=[f"Workspace directory does not exist: '{workspace_dir}'"],
@@ -34,7 +42,7 @@ class BuildRunner:
 
         # 1. Pre-flight Static Validation
         # Check for unconfigured .example files that block builds
-        src_dir = os.path.join(workspace_dir, "src")
+        src_dir = os.path.join(real_ws_path, "src")
         if os.path.exists(src_dir):
             for root, _, files in os.walk(src_dir):
                 for f in files:
@@ -59,7 +67,7 @@ class BuildRunner:
 
         # 3. Execute Build Verification
         res = provider.build_workspace(
-            workspace_dir=workspace_dir,
+            workspace_dir=real_ws_path,
             target_distro=target_distro,
             timeout_sec=timeout_sec,
         )
@@ -67,7 +75,7 @@ class BuildRunner:
         # 4. Generate artifact digest if build passed
         if res.status == BuildStatus.PASSED:
             hasher = hashlib.sha256()
-            hasher.update(f"{workspace_dir}:{res.duration_ms}".encode("utf-8"))
+            hasher.update(f"{real_ws_path}:{res.duration_ms}".encode("utf-8"))
             res.artifact_digest = hasher.hexdigest()
 
         return res

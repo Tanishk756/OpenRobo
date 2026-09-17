@@ -4,7 +4,7 @@ import os
 import shutil
 import subprocess
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from openrobo_runtime.models import (
     BuildStatus,
@@ -19,25 +19,53 @@ from openrobo_runtime.providers.base import ExecutionProvider
 class LocalProcessProvider(ExecutionProvider):
     """Executes build verification using local host colcon and rosdep toolchains."""
 
+    ALLOWED_ENV_VARS: Set[str] = {
+        "PATH",
+        "HOME",
+        "USER",
+        "LANG",
+        "LC_ALL",
+        "TMPDIR",
+        "TEMP",
+        "SYSTEMROOT",
+        "WINDIR",
+        "ROS_DISTRO",
+        "ROS_DOMAIN_ID",
+        "ROS_VERSION",
+        "RMW_IMPLEMENTATION",
+        "AMENT_PREFIX_PATH",
+        "COLCON_PREFIX_PATH",
+        "CMAKE_PREFIX_PATH",
+    }
+
+    DISALLOWED_ENV_SUBSTRINGS: Set[str] = {
+        "LD_PRELOAD",
+        "PYTHONPATH",
+        "BASH_ENV",
+        "ENV",
+        "PROMPT_COMMAND",
+    }
+
     def __init__(self, colcon_cmd: str = "colcon", rosdep_cmd: str = "rosdep"):
         self.colcon_cmd = colcon_cmd
         self.rosdep_cmd = rosdep_cmd
 
     def detect_availability(self) -> ProviderInfo:
         has_colcon = shutil.which(self.colcon_cmd) is not None
-        # has_rosdep check
 
         if has_colcon:
             return ProviderInfo(
                 provider_type=ExecutionProviderType.LOCAL_PROCESS,
                 status=ProviderStatus.AVAILABLE,
                 details="Local colcon build tool is installed on host.",
+                supports_build_verification=True,
             )
         else:
             return ProviderInfo(
                 provider_type=ExecutionProviderType.LOCAL_PROCESS,
                 status=ProviderStatus.UNAVAILABLE,
                 details="Local colcon executable not found in PATH.",
+                supports_build_verification=True,
             )
 
     def build_workspace(
@@ -57,16 +85,17 @@ class LocalProcessProvider(ExecutionProvider):
 
         start_t = time.time()
         # Security: Clean environment allowlist
-        clean_env = {
-            "PATH": os.environ.get("PATH", ""),
-            "HOME": os.environ.get("HOME", ""),
-            "USER": os.environ.get("USER", ""),
-            "LANG": os.environ.get("LANG", "C.UTF-8"),
-        }
-        if "ROS_DISTRO" in os.environ:
-            clean_env["ROS_DISTRO"] = os.environ["ROS_DISTRO"]
+        clean_env: Dict[str, str] = {}
+        for k in self.ALLOWED_ENV_VARS:
+            if k in os.environ:
+                clean_env[k] = os.environ[k]
+
+        # Merge user env vars ONLY if in allowlist and not containing injection tokens
         if env_vars:
-            clean_env.update(env_vars)
+            for k, v in env_vars.items():
+                if k.upper() in self.ALLOWED_ENV_VARS:
+                    if not any(bad in k.upper() for bad in self.DISALLOWED_ENV_SUBSTRINGS):
+                        clean_env[k] = str(v)
 
         cmd = [self.colcon_cmd, "build", "--symlink-install"]
         try:
@@ -85,6 +114,7 @@ class LocalProcessProvider(ExecutionProvider):
                 provider=ExecutionProviderType.LOCAL_PROCESS,
                 duration_ms=dur_ms,
                 colcon_status=status,
+                verified_via="host_colcon",
                 exit_codes={"colcon_build": proc.returncode},
                 stdout_summary=proc.stdout.splitlines()[-20:] if proc.stdout else [],
                 stderr_summary=proc.stderr.splitlines()[-20:] if proc.stderr else [],

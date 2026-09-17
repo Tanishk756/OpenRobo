@@ -1,4 +1,4 @@
-﻿# Security Policy
+# Security Policy
 
 The OpenRobo project takes the security and integrity of robotics software infrastructure seriously. This document outlines our security policies, supported versions, and procedures for reporting potential vulnerabilities.
 
@@ -48,3 +48,9 @@ If you discover an exploitable security vulnerability, flaw in static ingestion 
 - Maintainers will acknowledge receipt of the advisory within **48 hours**.
 - We will provide an assessment and work on a fix in a private security fork.
 - Once a patched release is ready, a coordinated security advisory and credit will be published.
+## Runtime Execution & Environment Security (M6.1)
+
+OpenRobo enforces strict security controls on local process and container execution:
+- **Environment Allowlist**: Only approved environment variables (`ROS_DISTRO`, `ROS_DOMAIN_ID`, `RMW_IMPLEMENTATION`, `AMENT_PREFIX_PATH`, `PATH`) are passed to child processes. Potentially hazardous variables (`LD_PRELOAD`, `PYTHONPATH` overrides, shell injection strings) are rejected.
+- **Filesystem Sandboxing**: Workspace build verification and rosbag telemetry reading enforce canonical path boundary checks to prevent directory traversal and symlink escapes.
+- **Process Ownership**: All spawned ROS processes and Connection Inspector executions are tracked by PID and terminate cleanly with parent runtime sessions.

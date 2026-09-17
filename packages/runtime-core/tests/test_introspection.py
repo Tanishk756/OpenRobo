@@ -3,6 +3,7 @@
 from openrobo_runtime import (
     ConnectionComparator,
     OverallHealthStatus,
+    RuntimeContract,
     RuntimeGraphInspector,
     TFInspector,
 )
@@ -28,13 +29,12 @@ def test_runtime_graph_inspector():
 
 def test_connection_comparator_planned_vs_observed():
     comparator = ConnectionComparator()
+    contract = RuntimeContract(
+        expected_nodes=["/nav2_bringup_node", "/slam_toolbox_node", "/lidar_driver_node"],
+    )
     planned_manifest = {
         "id": "diffbot_stack",
-        "resources": [
-            {"id": "nav2"},
-            {"id": "slam_toolbox"},
-            {"id": "lidar_driver"},
-        ],
+        "runtime_contract": contract.model_dump(),
     }
     observed_nodes = [
         {"name": "nav2_bringup_node", "is_alive": True},
@@ -45,8 +45,8 @@ def test_connection_comparator_planned_vs_observed():
     ]
 
     res = comparator.compare(planned_manifest, observed_nodes, observed_topics)
-    # lidar_driver was not in observed_nodes
-    assert "lidar_driver" in res.missing_nodes
+    # lidar_driver_node was in contract but not in observed_nodes
+    assert "/lidar_driver_node" in res.missing_nodes
     assert res.overall_status == OverallHealthStatus.DEGRADED
 
 

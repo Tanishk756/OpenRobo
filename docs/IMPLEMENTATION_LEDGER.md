@@ -34,3 +34,15 @@
 | **REQ-M6-06** | Rosbag2 Telemetry Foundation | `VERIFIED` | Rosbag2 SQLite3 metadata and message count inspection | `test_rosbag.py` | `openrobo_runtime/telemetry/` | MCAP optional plugin | Telemetry baseline |
 | **REQ-M6-07** | Runtime Studio Web UI & API | `VERIFIED` | Next.js 14 Runtime Studio (`/runtime`) and FastAPI endpoints (`/api/v1/runtime/*`) | `runtime.test.tsx`, `test_runtime_api.py` | `apps/web/app/runtime/`, `apps/api/routers/runtime.py` | None | Full interactive UI |
 | **REQ-M6-08** | Runtime CLI Commands | `VERIFIED` | `openrobo runtime providers/build-verify/connection-inspector/simulators/rosbag` | `test_cli.py` | `packages/cli/openrobo_cli/runtime.py` | None | Complete CLI toolchain |
+### Milestone 6.1 â€” Live Runtime Wiring, Truthful Readiness & Integration Verification (COMPLETED)
+- **Date**: September 17, 2026
+- **Status**: COMPLETE & VERIFIED
+- **Key Deliverables**:
+  - `RosEnvironmentDetector`: Guarded detection of ROS 2 environment, distribution, RMW implementation, rclpy, and CLI availability.
+  - `LiveRosGraphCollector`: Live node/topic/QoS collector supporting rclpy dynamic graph extraction and ros2 CLI fallback.
+  - `RuntimeContract`: Explicit expected nodes, typed topics, and TF transform contracts; eliminated fuzzy substring node matching.
+  - Topic type mismatch detection and endpoint QoS policy compatibility reasoning.
+  - Runtime Studio Web UI: Removed fake hardcoded demo state; wired to real backend endpoints with explicit Demo Mode toggle and truthful readiness badges.
+  - Security hardening: LocalProcessProvider environment allowlist, path traversal protection for build verification and rosbag inspection, and Podman capability reporting.
+  - Connection Inspector hardening: Dynamic version and executable discovery, verified distro classification (`humble`, `jazzy`), and controlled CLI/GUI execution endpoints.
+  - Verification test suite: 131 Python unit/integration tests + 16 Vitest frontend tests (100% passing).

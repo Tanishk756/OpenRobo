@@ -1,4 +1,4 @@
-"""Rosbag2 & MCAP Telemetry Foundation (Milestone 6)."""
+﻿"""Rosbag2 & MCAP Telemetry Foundation (Milestone 6.1)."""
 
 import os
 import sqlite3
@@ -13,25 +13,31 @@ class RosbagInspector:
     @staticmethod
     def inspect_bag_directory(bag_dir: str) -> Dict[str, Any]:
         """Inspect a rosbag2 folder containing metadata.yaml and storage files."""
-        if not os.path.exists(bag_dir):
+        if not bag_dir or "\0" in bag_dir:
+            return {"error": "Invalid rosbag path: contains null byte or is empty."}
+
+        real_bag_dir = os.path.realpath(bag_dir)
+        if not os.path.exists(real_bag_dir):
             return {"error": f"Bag directory '{bag_dir}' does not exist."}
 
-        meta_file = os.path.join(bag_dir, "metadata.yaml")
+        meta_file = os.path.join(real_bag_dir, "metadata.yaml")
         if os.path.exists(meta_file):
             try:
                 with open(meta_file, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f)
                     bag_info = data.get("rosbag2_bagfile_information", {})
                     topics_with_count = bag_info.get("topics_with_message_count", [])
+                    duration_ns = bag_info.get("duration", {}).get("nanoseconds", 0)
                     return {
                         "storage_identifier": bag_info.get("storage_identifier", "sqlite3"),
-                        "duration_ns": bag_info.get("duration", {}).get("nanoseconds", 0),
+                        "duration_ns": duration_ns,
+                        "duration_sec": round(duration_ns / 1e9, 3) if duration_ns else 0.0,
                         "message_count": bag_info.get("message_count", 0),
                         "topics": [
                             {
                                 "name": t.get("topic_metadata", {}).get("name"),
                                 "type": t.get("topic_metadata", {}).get("type"),
-                                "count": t.get("message_count", 0),
+                                "message_count": t.get("message_count", 0),
                             }
                             for t in topics_with_count
                         ],
@@ -40,10 +46,13 @@ class RosbagInspector:
                 return {"error": f"Failed to parse metadata.yaml: {str(e)}"}
 
         # Fallback inspection for raw .db3 files
-        db3_files = [f for f in os.listdir(bag_dir) if f.endswith(".db3")]
-        if db3_files:
-            db_path = os.path.join(bag_dir, db3_files[0])
-            return RosbagInspector.inspect_sqlite3_db(db_path)
+        if os.path.isdir(real_bag_dir):
+            db3_files = [f for f in os.listdir(real_bag_dir) if f.endswith(".db3")]
+            if db3_files:
+                db_path = os.path.join(real_bag_dir, db3_files[0])
+                return RosbagInspector.inspect_sqlite3_db(db_path)
+        elif real_bag_dir.endswith(".db3") and os.path.isfile(real_bag_dir):
+            return RosbagInspector.inspect_sqlite3_db(real_bag_dir)
 
         return {"error": "No metadata.yaml or .db3 storage files found in bag directory."}
 
@@ -53,7 +62,7 @@ class RosbagInspector:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             cursor.execute("SELECT name, type FROM topics;")
-            topics = [{"name": row[0], "type": row[1]} for row in cursor.fetchall()]
+            topics = [{"name": row[0], "type": row[1], "message_count": 0} for row in cursor.fetchall()]
 
             cursor.execute("SELECT count(*) FROM messages;")
             msg_count = cursor.fetchone()[0]
@@ -62,6 +71,7 @@ class RosbagInspector:
             return {
                 "storage_identifier": "sqlite3",
                 "message_count": msg_count,
+                "duration_sec": 0.0,
                 "topics": topics,
             }
         except Exception as e:
