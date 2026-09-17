@@ -96,14 +96,30 @@ class AgentDaemon:
         return len(events)
 
     def flush_spool(self, batch_size: int = 50) -> int:
-        """Flush queued spool events over transport."""
+        """Flush queued spool events over transport using typed endpoint routing."""
         queued = self.spool.peek(limit=batch_size)
         if not queued:
             return 0
-        ack_ids = self.transport.send_batch(queued)
-        if ack_ids:
-            return self.spool.acknowledge(ack_ids)
-        return 0
+
+        total_acked = 0
+        heartbeats = [e for e in queued if e.message_type.upper() == "HEARTBEAT"]
+        telemetries = [e for e in queued if e.message_type.upper() != "HEARTBEAT"]
+
+        # 1. Dispatch heartbeats to /agent/heartbeat
+        for hb_env in heartbeats:
+            res = self.transport.send_heartbeat(hb_env)
+            if res.get("status") == "ACK" or (res.get("success", True) and not res.get("error")):
+                self.spool.acknowledge(hb_env.message_id)
+                total_acked += 1
+
+        # 2. Dispatch telemetry batch to /agent/telemetry-batch
+        if telemetries:
+            ack_ids = self.transport.send_batch(telemetries)
+            if ack_ids:
+                acked = self.spool.acknowledge(ack_ids)
+                total_acked += acked
+
+        return total_acked
 
     async def run_loop(self, stop_event: Optional[asyncio.Event] = None) -> None:
         """Run continuous asynchronous agent loop."""
