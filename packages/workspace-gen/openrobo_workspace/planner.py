@@ -1,4 +1,4 @@
-﻿"""Workspace Generation Planner.
+"""Workspace Generation Planner.
 
 Constructs a strictly-typed, validated WorkspaceGenerationPlan from
 canonical stack manifests, registry metadata, and compatibility results.

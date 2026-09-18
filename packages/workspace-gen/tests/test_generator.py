@@ -1,4 +1,4 @@
-﻿"""Comprehensive unit tests for OpenRobo Workspace Generator (Milestone 5.1 Hardened)."""
+"""Comprehensive unit tests for OpenRobo Workspace Generator (Milestone 5.1 Hardened)."""
 
 import ast
 import hashlib

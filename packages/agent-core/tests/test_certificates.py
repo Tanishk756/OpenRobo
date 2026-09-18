@@ -1,4 +1,4 @@
-﻿"""Unit tests for X.509 certificates, CA gates, persistence, and CSR validation."""
+"""Unit tests for X.509 certificates, CA gates, persistence, and CSR validation."""
 
 import pytest
 from openrobo_agent.certificates import (

@@ -1,4 +1,4 @@
-﻿"""Live Transform (TF2) Frame Connectivity Inspector."""
+"""Live Transform (TF2) Frame Connectivity Inspector."""
 
 from typing import Dict, List, Optional
 

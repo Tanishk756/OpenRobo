@@ -1,4 +1,4 @@
-﻿"""Platform-specific deployment safety policy evaluation with telemetry freshness checks and zero implicit defaults."""
+"""Platform-specific deployment safety policy evaluation with telemetry freshness checks and zero implicit defaults."""
 
 from datetime import datetime, timezone
 from typing import Any

@@ -1,4 +1,4 @@
-﻿"""Workspace generation CLI commands for OpenRobo."""
+"""Workspace generation CLI commands for OpenRobo."""
 
 import hashlib
 import json

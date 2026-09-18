@@ -1,4 +1,12 @@
-﻿import json
+from apps.api.models.deployment import DeploymentInstructionModel
+from apps.api.services.deployment_service import DeploymentService
+from openrobo_release.deployment_protocol import (
+    DeploymentAckEnvelope,
+    DeploymentInstructionEnvelope,
+    DeploymentStatusReport,
+    InstructionType,
+)
+import json
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -61,6 +69,9 @@ ALLOWED_OPERATIONS = {
     "GET_SIMULATOR_STATUS",
     "HEARTBEAT",
     "TELEMETRY",
+    "DEPLOYMENT_ACK",
+    "DEPLOYMENT_STATUS",
+    "DEPLOYMENT_EVENT",
 }
 
 FORBIDDEN_OPERATIONS = {
@@ -70,6 +81,14 @@ FORBIDDEN_OPERATIONS = {
     "RUN_SCRIPT",
     "PYTHON",
     "UPLOAD_AND_EXECUTE",
+    "STAGE_RELEASE",
+    "ACTIVATE_RELEASE",
+    "CANCEL_DEPLOYMENT",
+    "GET_DEPLOYMENT_STATUS",
+    "RUN",
+    "TASK",
+    "SCRIPT",
+    "ACTION",
 }
 
 
@@ -651,6 +670,37 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
     ws_registry.register(device.id, websocket)
     replay = get_replay_manager()
 
+    # Deliver any pending durable outbox instructions for this authenticated device
+    try:
+        pending_instructions = await DeploymentService.get_pending_instructions_for_device(db, device.id)
+        for inst in pending_instructions:
+            payload_dict = {}
+            try:
+                payload_dict = json.loads(inst.payload_json)
+            except Exception:
+                pass
+            inst_envelope = DeploymentInstructionEnvelope(
+                instruction_id=inst.id,
+                deployment_id=inst.deployment_id,
+                generation=inst.generation,
+                instruction_type=InstructionType(inst.instruction_type),
+                payload=payload_dict,
+                payload_digest=inst.payload_digest,
+                created_at=inst.created_at.isoformat(),
+                expires_at=inst.expires_at.isoformat(),
+            )
+            await websocket.send_json({
+                "message_type": "DEPLOYMENT_INSTRUCTION",
+                "instruction": inst_envelope.model_dump(),
+            })
+            inst.status = "SENT"
+            inst.attempt_count += 1
+            inst.last_attempt_at = datetime.now(timezone.utc)
+        if pending_instructions:
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Failed to deliver pending instructions to device {device.id}: {e}")
+
     try:
         while True:
             raw_msg = await websocket.receive_text()
@@ -717,6 +767,37 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "reply_to": envelope.message_id,
                 })
+            elif msg_type == "DEPLOYMENT_ACK":
+                try:
+                    ack_env = DeploymentAckEnvelope.model_validate(envelope.payload)
+                    if ack_env.device_id != device.id:
+                        await websocket.send_json({"status": "ERROR", "error": "Cross-device ACK forbidden"})
+                        continue
+                    inst_stmt = select(DeploymentInstructionModel).where(
+                        DeploymentInstructionModel.id == ack_env.instruction_id,
+                        DeploymentInstructionModel.device_id == device.id,
+                    )
+                    inst_res = await db.execute(inst_stmt)
+                    inst = inst_res.scalar_one_or_none()
+                    if inst:
+                        inst.status = "ACKNOWLEDGED" if ack_env.accepted else "REJECTED"
+                        inst.acknowledged_at = datetime.now(timezone.utc)
+                        await db.commit()
+                    await websocket.send_json({"status": "ACK", "message_id": envelope.message_id, "device_id": device.id})
+                except Exception as e:
+                    await websocket.send_json({"status": "ERROR", "error": f"Invalid DEPLOYMENT_ACK payload: {e}"})
+            elif msg_type == "DEPLOYMENT_STATUS":
+                try:
+                    status_report = DeploymentStatusReport.model_validate(envelope.payload)
+                    if status_report.device_id != device.id:
+                        await websocket.send_json({"status": "ERROR", "error": "Cross-device status report forbidden"})
+                        continue
+                    await DeploymentService.handle_device_status_report(db, device.id, status_report)
+                    await db.commit()
+                    await websocket.send_json({"status": "ACK", "message_id": envelope.message_id, "device_id": device.id})
+                except Exception as e:
+                    await db.rollback()
+                    await websocket.send_json({"status": "ERROR", "error": f"Status update failed: {e}"})
             else:
                 await websocket.send_json({
                     "status": "ACK",

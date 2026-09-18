@@ -1,4 +1,4 @@
-﻿from openrobo_runtime.introspection.comparator import ConnectionComparator
+from openrobo_runtime.introspection.comparator import ConnectionComparator
 from openrobo_runtime.models import (
     ExpectedTopicContract,
     OverallHealthStatus,

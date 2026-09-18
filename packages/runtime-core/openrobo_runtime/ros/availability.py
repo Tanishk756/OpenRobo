@@ -1,4 +1,4 @@
-﻿"""ROS Environment Detector and Capability Discovery."""
+"""ROS Environment Detector and Capability Discovery."""
 
 import os
 import shutil

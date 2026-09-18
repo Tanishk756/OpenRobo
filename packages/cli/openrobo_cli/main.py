@@ -13,6 +13,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from openrobo_cli.deployment import deployment_cli
 from openrobo_cli.release import release_app
 
 __version__ = "0.7.0"
@@ -32,6 +33,7 @@ app.add_typer(runtime_app, name="runtime")
 app.add_typer(fleet_app, name="fleet")
 app.add_typer(agent_app, name="agent")
 app.add_typer(release_app, name="release")
+app.add_typer(deployment_cli, name="deployment")
 
 console = Console()
 

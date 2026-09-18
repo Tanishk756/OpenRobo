@@ -1,4 +1,4 @@
-﻿"""Workspace README generator."""
+"""Workspace README generator."""
 
 from openrobo_workspace.models import GeneratedFile, WorkspaceGenerationPlan
 

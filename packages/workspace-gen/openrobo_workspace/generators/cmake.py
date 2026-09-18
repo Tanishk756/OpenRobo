@@ -1,4 +1,4 @@
-﻿"""CMakeLists.txt generator for bringup package."""
+"""CMakeLists.txt generator for bringup package."""
 
 from openrobo_workspace.models import GeneratedFile, WorkspaceGenerationPlan
 

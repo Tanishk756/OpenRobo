@@ -1,4 +1,4 @@
-﻿# Milestone 7 — Distributed Fleet Management, Remote Agents & Telemetry Transport
+# Milestone 7 — Distributed Fleet Management, Remote Agents & Telemetry Transport
 
 **Milestone:** M7 — Distributed Fleet Management, Remote Agents & Telemetry Transport
 **Project:** OpenRobo

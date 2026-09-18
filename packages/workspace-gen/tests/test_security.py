@@ -1,4 +1,4 @@
-﻿"""Security, shell-injection, and path-traversal tests for OpenRobo Workspace Generator."""
+"""Security, shell-injection, and path-traversal tests for OpenRobo Workspace Generator."""
 
 import pytest
 from openrobo_workspace import WorkspaceGenerator

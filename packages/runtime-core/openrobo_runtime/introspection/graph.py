@@ -1,4 +1,4 @@
-﻿"""Runtime ROS Graph Inspector."""
+"""Runtime ROS Graph Inspector."""
 
 from typing import Any, Dict, List
 

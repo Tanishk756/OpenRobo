@@ -1,4 +1,4 @@
-﻿"""Rosbag2 & MCAP Telemetry Foundation (Milestone 6.1)."""
+"""Rosbag2 & MCAP Telemetry Foundation (Milestone 6.1)."""
 
 import os
 import sqlite3

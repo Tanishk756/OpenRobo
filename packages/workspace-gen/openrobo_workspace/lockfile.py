@@ -1,4 +1,4 @@
-﻿"""Lockfile generator for OpenRobo workspaces.
+"""Lockfile generator for OpenRobo workspaces.
 
 Emits structured, cryptographic provenance and evidence metadata for all components.
 Avoids ambiguous magic strings (e.g. "UNKNOWN") in favor of structured nulls and statuses.

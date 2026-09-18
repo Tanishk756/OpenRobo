@@ -1,4 +1,4 @@
-﻿"""Filesystem utilities for safe workspace generation."""
+"""Filesystem utilities for safe workspace generation."""
 
 import os
 import re

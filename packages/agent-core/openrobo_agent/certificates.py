@@ -1,4 +1,4 @@
-﻿"""X.509 Certificate, CSR, and Development CA Utilities using cryptography."""
+"""X.509 Certificate, CSR, and Development CA Utilities using cryptography."""
 
 import abc
 import hashlib

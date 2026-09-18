@@ -1,4 +1,4 @@
-﻿"""Data models for OpenRobo Workspace and Deployment Generation (Milestone 5.1)."""
+"""Data models for OpenRobo Workspace and Deployment Generation (Milestone 5.1)."""
 
 from datetime import datetime, timezone
 from enum import Enum

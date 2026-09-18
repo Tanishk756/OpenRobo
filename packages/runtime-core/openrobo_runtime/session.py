@@ -1,4 +1,4 @@
-﻿"""Runtime Process & Session Lifecycle Manager (Milestone 6.1)."""
+"""Runtime Process & Session Lifecycle Manager (Milestone 6.1)."""
 
 import os
 import subprocess

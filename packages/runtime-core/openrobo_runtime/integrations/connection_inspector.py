@@ -1,4 +1,4 @@
-﻿"""Connection Inspector Integration Adapter (Milestone 6.1).
+"""Connection Inspector Integration Adapter (Milestone 6.1).
 
 External tool integration for the Dyno Robotics connection_inspector package.
 

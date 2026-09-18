@@ -1,4 +1,4 @@
-﻿"""Composite Bringup Launch Generator.
+"""Composite Bringup Launch Generator.
 
 Synthesizes the main ROS 2 launch orchestration entrypoint using strictly
 verified adapters and safe user parameter references.

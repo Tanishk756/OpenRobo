@@ -7,10 +7,12 @@ from fastapi.responses import JSONResponse
 from apps.api.database import Base, engine
 from apps.api.routers import (
     compatibility,
+    deployments,
     fleet,
     graph,
     health,
     ingestion,
+    releases,
     resources,
     runtime,
     search,
@@ -73,6 +75,8 @@ app.include_router(stacks.router, prefix="/api/v1")
 app.include_router(workspace.router, prefix="/api/v1")
 app.include_router(runtime.router, prefix="/api/v1")
 app.include_router(fleet.router, prefix="/api/v1")
+app.include_router(releases.router)
+app.include_router(deployments.router)
 
 
 @app.get("/", include_in_schema=False)

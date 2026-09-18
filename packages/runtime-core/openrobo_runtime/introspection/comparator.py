@@ -1,4 +1,4 @@
-﻿"""Stack Runtime Contract & Observed Graph Comparator (Milestone 6.1)."""
+"""Stack Runtime Contract & Observed Graph Comparator (Milestone 6.1)."""
 
 from typing import Any, Dict, List, Optional
 

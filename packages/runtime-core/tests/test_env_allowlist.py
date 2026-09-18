@@ -1,4 +1,4 @@
-﻿from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from openrobo_runtime.models import ProviderStatus
 from openrobo_runtime.providers.local import LocalProcessProvider

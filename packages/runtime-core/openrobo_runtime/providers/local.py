@@ -1,4 +1,4 @@
-﻿"""Local Process Execution Provider for native colcon builds."""
+"""Local Process Execution Provider for native colcon builds."""
 
 import os
 import shutil

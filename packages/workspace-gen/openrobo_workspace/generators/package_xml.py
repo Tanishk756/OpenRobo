@@ -1,4 +1,4 @@
-﻿"""Package XML (REP-149) generator for bringup package (Hardened)."""
+"""Package XML (REP-149) generator for bringup package (Hardened)."""
 
 import re
 from xml.sax.saxutils import escape

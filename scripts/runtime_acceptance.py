@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """OpenRobo Milestone 6.2 - Live Runtime Acceptance & Release Readiness Verification Suite."""
 
 import hashlib

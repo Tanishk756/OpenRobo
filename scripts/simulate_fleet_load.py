@@ -1,4 +1,4 @@
-﻿"""
+"""
 OpenRobo Milestone 7.1.1 - 100-Agent Local Control-Plane Application Simulation
 Measures:
 - 100 concurrent agent key generation and enrollment token consumption

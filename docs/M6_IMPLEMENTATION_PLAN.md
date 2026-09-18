@@ -1,4 +1,4 @@
-﻿# Milestone 6 — Simulation & Runtime Integration (Implementation Plan)
+# Milestone 6 — Simulation & Runtime Integration (Implementation Plan)
 
 **Milestone:** M6 — Simulation & Runtime Integration
 **Status:** PROPOSED & PLANNED (Do NOT Implement in M5.1)

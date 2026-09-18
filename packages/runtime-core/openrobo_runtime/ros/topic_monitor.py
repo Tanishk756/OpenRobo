@@ -1,4 +1,4 @@
-﻿"""Live Topic Rate Monitor with Bounded Sampling."""
+"""Live Topic Rate Monitor with Bounded Sampling."""
 
 import time
 

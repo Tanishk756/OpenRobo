@@ -1,4 +1,4 @@
-﻿"""OpenRobo Agent Transport Abstraction & mTLS Client."""
+"""OpenRobo Agent Transport Abstraction & mTLS Client."""
 
 import abc
 import json

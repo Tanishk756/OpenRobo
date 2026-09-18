@@ -1,4 +1,4 @@
-﻿"""Static Generated-Workspace Validator.
+"""Static Generated-Workspace Validator.
 
 Performs deterministic static analysis on generated workspace artifacts
 (XML, Python AST, YAML, JSON, ROS naming, file references).

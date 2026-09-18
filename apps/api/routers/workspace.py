@@ -1,4 +1,4 @@
-﻿"""Workspace generation API router for OpenRobo (Milestone 5)."""
+"""Workspace generation API router for OpenRobo (Milestone 5)."""
 
 from typing import Any, Dict, Optional
 

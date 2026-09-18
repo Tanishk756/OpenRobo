@@ -1,4 +1,4 @@
-﻿"""Live ROS 2 Graph Collector using rclpy or safe CLI fallback."""
+"""Live ROS 2 Graph Collector using rclpy or safe CLI fallback."""
 
 import logging
 import shutil

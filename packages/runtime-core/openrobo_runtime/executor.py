@@ -1,4 +1,4 @@
-﻿"""Build Verification Executor (Milestone 6.1)."""
+"""Build Verification Executor (Milestone 6.1)."""
 
 import hashlib
 import os

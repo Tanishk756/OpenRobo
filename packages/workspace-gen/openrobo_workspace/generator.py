@@ -1,4 +1,4 @@
-﻿"""Workspace Generator Core.
+"""Workspace Generator Core.
 
 Orchestrates planning, artifact synthesis, validation, filesystem output,
 and reproducible archive packaging.

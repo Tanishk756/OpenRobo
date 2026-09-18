@@ -1,4 +1,4 @@
-﻿"""Unit tests for ROS Runtime Introspection and Connection Comparator."""
+"""Unit tests for ROS Runtime Introspection and Connection Comparator."""
 
 from openrobo_runtime import (
     ConnectionComparator,

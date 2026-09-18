@@ -1,4 +1,4 @@
-﻿"""OpenRobo Runtime Verification, Introspection, and Simulation Engine (Milestone 6.1)."""
+"""OpenRobo Runtime Verification, Introspection, and Simulation Engine (Milestone 6.1)."""
 
 from openrobo_runtime.executor import BuildRunner
 from openrobo_runtime.integrations.connection_inspector import ConnectionInspectorAdapter

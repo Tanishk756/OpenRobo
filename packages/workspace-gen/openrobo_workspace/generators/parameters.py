@@ -1,4 +1,4 @@
-﻿"""Parameter YAML files generator."""
+"""Parameter YAML files generator."""
 
 from typing import List
 

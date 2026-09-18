@@ -1,4 +1,4 @@
-﻿"""Data models for OpenRobo Runtime Verification, Introspection, and Simulation (Milestone 6.1)."""
+"""Data models for OpenRobo Runtime Verification, Introspection, and Simulation (Milestone 6.1)."""
 
 from datetime import datetime, timezone
 from enum import Enum

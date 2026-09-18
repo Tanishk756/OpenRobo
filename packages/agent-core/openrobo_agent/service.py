@@ -1,4 +1,4 @@
-﻿"""OpenRobo Agent Long-Lived Service & Systemd Unit Generator."""
+"""OpenRobo Agent Long-Lived Service & Systemd Unit Generator."""
 
 import asyncio
 import logging
