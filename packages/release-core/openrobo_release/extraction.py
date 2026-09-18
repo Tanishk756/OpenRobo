@@ -1,230 +1,248 @@
-"""Safe archive extraction engine with strict path traversal, symlink, and resource safeguards."""
+"""Secure, traversal-resistant artifact extractor with quarantine isolation and post-extraction verification."""
 
 import hashlib
 import os
+import re
+import shutil
 import tarfile
+import unicodedata
+import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
 
 from openrobo_release.models import ReleaseManifest
 
+# Reserved Windows device names
+WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+}
 
-class ExtractionSecurityError(Exception):
-    """Raised when an archive violates extraction security constraints."""
-    pass
+
+def sanitize_and_validate_path(
+    rel_path: str,
+    seen_canonical_paths: set[str],
+    max_path_length: int = 255,
+) -> str:
+    """Validates and canonicalizes an archive member path, rejecting traversals, control chars, reserved names, and duplicate collisions."""
+    if not rel_path:
+        raise ValueError("Archive entry has empty path.")
+
+    # Reject NUL and ASCII control characters (< 32)
+    for c in rel_path:
+        if ord(c) < 32:
+            raise ValueError(f"Archive entry path contains forbidden control character (ASCII {ord(c)}): {rel_path!r}")
+
+    # Normalize backslashes to forward slashes
+    norm_path = rel_path.replace("\\", "/")
+
+    # Reject leading slashes (absolute POSIX paths)
+    if norm_path.startswith("/"):
+        raise ValueError(f"Archive entry has forbidden absolute path: {rel_path}")
+
+    # Reject Windows drive letters (e.g. C:, D:)
+    if re.match(r"^[a-zA-Z]:", norm_path):
+        raise ValueError(f"Archive entry has forbidden Windows drive letter path: {rel_path}")
+
+    # Reject UNC paths (// or \\)
+    if norm_path.startswith("//") or rel_path.startswith(r"\\"):
+        raise ValueError(f"Archive entry has forbidden UNC path: {rel_path}")
+
+    # Canonicalize path components (resolving . and redundant slashes)
+    parts = norm_path.split("/")
+    clean_parts: list[str] = []
+    for part in parts:
+        if not part or part == ".":
+            continue
+        if part == "..":
+            raise ValueError(f"Archive entry contains path traversal sequence ('..'): {rel_path}")
+
+        # Check Windows reserved device names (e.g. CON, PRN, AUX, NUL, COM1, LPT1)
+        base_name = part.split(".")[0].upper()
+        if base_name in WINDOWS_RESERVED_NAMES:
+            raise ValueError(f"Archive entry contains Windows reserved device name '{part}': {rel_path}")
+
+        clean_parts.append(part)
+
+    if not clean_parts:
+        raise ValueError(f"Archive entry resolves to empty path: {rel_path}")
+
+    canonical_str = "/".join(clean_parts)
+    if len(canonical_str) > max_path_length:
+        raise ValueError(f"Archive entry path exceeds maximum length ({len(canonical_str)} > {max_path_length}): {rel_path}")
+
+    # Unicode normalization (NFC)
+    nfc_str = unicodedata.normalize("NFC", canonical_str)
+
+    # Check for duplicate / alias collisions (case-folded)
+    lookup_key = nfc_str.lower()
+    if lookup_key in seen_canonical_paths:
+        raise ValueError(f"Archive contains duplicate or colliding path alias: {rel_path} (canonical: {nfc_str})")
+
+    seen_canonical_paths.add(lookup_key)
+    return nfc_str
 
 
 class SafeArtifactExtractor:
-    """
-    Guards archive extraction against path traversal, symlink escapes, zip bombs,
-    device files, and corrupted or tampered payloads.
-    """
+    """Extracts and verifies release archives with strict traversal prevention, link rejection, and quarantine staging."""
 
     def __init__(
         self,
-        max_archive_bytes: int = 100 * 1024 * 1024,          # 100 MB
-        max_file_count: int = 5000,
-        max_individual_file_bytes: int = 50 * 1024 * 1024,   # 50 MB
-        max_total_extracted_bytes: int = 200 * 1024 * 1024,  # 200 MB
-        max_path_length: int = 250,
-        allow_symlinks: bool = True,
-    ):
-        self.max_archive_bytes = max_archive_bytes
-        self.max_file_count = max_file_count
-        self.max_individual_file_bytes = max_individual_file_bytes
-        self.max_total_extracted_bytes = max_total_extracted_bytes
-        self.max_path_length = max_path_length
+        allow_symlinks: bool = False,
+        allow_hardlinks: bool = False,
+        max_expansion_ratio: float = 50.0,
+        max_files: int = 10000,
+        max_total_bytes: int = 100 * 1024 * 1024,  # 100 MB
+        max_file_size: int = 50 * 1024 * 1024,     # 50 MB
+        max_path_length: int = 255,
+    ) -> None:
         self.allow_symlinks = allow_symlinks
+        self.allow_hardlinks = allow_hardlinks
+        self.max_expansion_ratio = max_expansion_ratio
+        self.max_files = max_files
+        self.max_total_bytes = max_total_bytes
+        self.max_file_size = max_file_size
+        self.max_path_length = max_path_length
 
-    def sanitize_path(self, member_name: str, target_dir: Path) -> Path:
-        """
-        Validate and resolve a member path, strictly rejecting path traversal,
-        absolute paths, Windows drive letters, UNC paths, and NUL bytes.
-        """
-        if "\0" in member_name:
-            raise ExtractionSecurityError(f"Malicious NUL byte detected in path: '{member_name}'")
-
-        # Normalize slashes
-        clean_name = member_name.replace("\\", "/").strip()
-
-        # Reject absolute paths (POSIX / or Windows \ or UNC //)
-        if clean_name.startswith("/") or clean_name.startswith("//"):
-            raise ExtractionSecurityError(f"Absolute or UNC path forbidden: '{member_name}'")
-
-        # Reject Windows drive letters (e.g. C:, D:)
-        if len(clean_name) >= 2 and clean_name[1] == ":":
-            raise ExtractionSecurityError(f"Windows drive path forbidden: '{member_name}'")
-
-        # Check path length
-        if len(clean_name) > self.max_path_length:
-            raise ExtractionSecurityError(f"Path length {len(clean_name)} exceeds limit {self.max_path_length}")
-
-        # Split parts and check for traversal
-        parts = [p for p in clean_name.split("/") if p and p != "."]
-        if not parts:
-            raise ExtractionSecurityError(f"Empty or root-only path in archive member: '{member_name}'")
-
-        for part in parts:
-            if part == "..":
-                raise ExtractionSecurityError(f"Path traversal sequence '..' forbidden: '{member_name}'")
-
-        resolved_target = (target_dir / Path(*parts)).resolve()
-        target_root_resolved = target_dir.resolve()
-
-        try:
-            resolved_target.relative_to(target_root_resolved)
-        except ValueError:
-            raise ExtractionSecurityError(f"Path escapes extraction directory: '{member_name}'")
-
-        return resolved_target
-
-    def validate_archive_members(self, tar: tarfile.TarFile, target_dir: Path) -> List[tarfile.TarInfo]:
-        """Inspect all tar members before extraction, verifying resource bounds and security constraints."""
-        members = tar.getmembers()
-
-        if len(members) > self.max_file_count:
-            raise ExtractionSecurityError(
-                f"Archive contains {len(members)} entries, exceeding maximum limit of {self.max_file_count}."
-            )
-
-        total_extracted_bytes = 0
-        seen_paths: Set[str] = set()
-
-        for ti in members:
-            # Check for duplicate normalized entries
-            norm_name = ti.name.replace("\\", "/").rstrip("/")
-            if norm_name in seen_paths:
-                raise ExtractionSecurityError(f"Duplicate path entry in archive: '{ti.name}'")
-            seen_paths.add(norm_name)
-
-            # Validate path safety
-            dest_path = self.sanitize_path(ti.name, target_dir)
-
-            # Check file size limits
-            if ti.size > self.max_individual_file_bytes:
-                raise ExtractionSecurityError(
-                    f"Member '{ti.name}' size {ti.size} bytes exceeds maximum individual limit of {self.max_individual_file_bytes}."
-                )
-
-            total_extracted_bytes += ti.size
-            if total_extracted_bytes > self.max_total_extracted_bytes:
-                raise ExtractionSecurityError(
-                    f"Total extracted size {total_extracted_bytes} bytes exceeds limit of {self.max_total_extracted_bytes}."
-                )
-
-            # Check file types
-            if ti.isreg() or ti.isdir():
-                pass
-            elif ti.issym():
-                if not self.allow_symlinks:
-                    raise ExtractionSecurityError(f"Symlinks are disabled by security policy: '{ti.name}'")
-                # Validate symlink target does not escape target_dir
-                link_target = ti.linkname.replace("\\", "/")
-                if link_target.startswith("/") or (len(link_target) >= 2 and link_target[1] == ":"):
-                    raise ExtractionSecurityError(f"Absolute symlink target forbidden: '{ti.linkname}'")
-                dest_dir = dest_path.parent
-                resolved_link = (dest_dir / link_target).resolve()
-                try:
-                    resolved_link.relative_to(target_dir.resolve())
-                except ValueError:
-                    raise ExtractionSecurityError(f"Symlink '{ti.name}' targets outside extraction root: '{ti.linkname}'")
-            elif ti.islnk():
-                # Hardlink target validation
-                hard_target = self.sanitize_path(ti.linkname, target_dir)
-                try:
-                    hard_target.relative_to(target_dir.resolve())
-                except ValueError:
-                    raise ExtractionSecurityError(f"Hardlink '{ti.name}' targets outside extraction root: '{ti.linkname}'")
-            else:
-                raise ExtractionSecurityError(f"Unsupported/unsafe special file type in archive member: '{ti.name}'")
-
-        return members
-
-    def extract_archive(
+    def extract_and_verify(
         self,
-        archive_path: Path,
-        target_dir: Path,
-        manifest: Optional[ReleaseManifest] = None,
-        strict_file_list: bool = True,
-    ) -> Tuple[bool, str, Dict[str, Any]]:
-        """
-        Safely extract archive into target_dir and verify post-extraction file hashes against manifest.
-        """
-        archive_path = Path(archive_path).resolve()
-        target_dir = Path(target_dir).resolve()
-
-        if not archive_path.exists():
-            return False, f"Archive file does not exist: {archive_path}", {}
-
-        archive_size = archive_path.stat().st_size
-        if archive_size > self.max_archive_bytes:
-            return False, f"Archive size {archive_size} bytes exceeds maximum limit of {self.max_archive_bytes}.", {}
-
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            with tarfile.open(archive_path, "r:gz") as tar:
-                members = self.validate_archive_members(tar, target_dir)
-                tar.extractall(path=str(target_dir), members=members, filter="tar" if hasattr(tarfile, "tar_filter") else None)
-        except Exception as e:
-            return False, f"Archive extraction aborted due to security violation or corruption: {e}", {}
-
-        # Post-extraction file integrity check against manifest
-        if manifest is not None:
-            post_ok, post_msg, details = self.verify_extracted_files(target_dir, manifest, strict=strict_file_list)
-            if not post_ok:
-                return False, f"Post-extraction verification failed: {post_msg}", details
-
-        return True, "Artifact extracted and verified safely.", {"target_dir": str(target_dir)}
-
-    def verify_extracted_files(
-        self,
-        extracted_dir: Path,
+        archive_path: Path | str,
+        target_dir: Path | str,
         manifest: ReleaseManifest,
-        strict: bool = True,
-    ) -> Tuple[bool, str, Dict[str, Any]]:
-        """
-        Recalculate SHA-256 for all extracted files and confirm exact match against manifest.
-        """
-        extracted_dir = Path(extracted_dir).resolve()
-        manifest_files = {f.path: f for f in manifest.files}
-        found_files: Set[str] = set()
+        strict_mode: bool = True,
+    ) -> None:
+        """Safely unpacks archive into a quarantine folder, verifies all file digests, and atomically moves to target_dir."""
+        arch_p = Path(archive_path).resolve()
+        dest_p = Path(target_dir).resolve()
+        dest_p.parent.mkdir(parents=True, exist_ok=True)
 
-        for expected_path, expected_entry in manifest_files.items():
-            full_path = extracted_dir / expected_path
-            if not full_path.exists() or not full_path.is_file():
-                return False, f"Required manifest file missing after extraction: '{expected_path}'", {"missing_file": expected_path}
+        archive_size = arch_p.stat().st_size
+        if archive_size == 0:
+            raise ValueError("Release archive is empty (0 bytes).")
 
-            sha256 = hashlib.sha256()
-            size = 0
-            with open(full_path, "rb") as f:
-                while chunk := f.read(65536):
-                    sha256.update(chunk)
-                    size += len(chunk)
-            actual_hash = sha256.hexdigest()
+        # Create isolated quarantine directory
+        quarantine_p = dest_p.parent / f"{dest_p.name}.incoming.{uuid.uuid4().hex[:8]}"
+        quarantine_p.mkdir(parents=True, exist_ok=False)
 
-            if actual_hash != expected_entry.sha256:
-                return False, f"File digest mismatch on '{expected_path}': expected {expected_entry.sha256}, actual {actual_hash}", {
-                    "path": expected_path,
-                    "expected_sha256": expected_entry.sha256,
-                    "actual_sha256": actual_hash,
-                }
+        try:
+            total_bytes = 0
+            file_count = 0
+            seen_canonical: set[str] = set()
 
-            if size != expected_entry.size_bytes:
-                return False, f"File size mismatch on '{expected_path}': expected {expected_entry.size_bytes}, actual {size}", {
-                    "path": expected_path,
-                    "expected_size": expected_entry.size_bytes,
-                    "actual_size": size,
-                }
+            with tarfile.open(arch_p, mode="r:*") as tar:
+                members = tar.getmembers()
 
-            found_files.add(expected_path)
+                if len(members) > self.max_files:
+                    raise ValueError(f"Archive entry count ({len(members)}) exceeds limit ({self.max_files}).")
 
-        if strict:
-            # Check if any extra untracked files exist
-            for root, _, filenames in os.walk(extracted_dir):
-                for f in filenames:
-                    rel_p = os.path.relpath(os.path.join(root, f), extracted_dir).replace("\\", "/")
-                    if rel_p not in manifest_files:
-                        return False, f"Unexpected extra file found in extracted directory: '{rel_p}'", {"unexpected_file": rel_p}
+                # Pre-scan and validate all members
+                for member in members:
+                    sanitize_and_validate_path(
+                        member.name,
+                        seen_canonical_paths=seen_canonical,
+                        max_path_length=self.max_path_length,
+                    )
 
-        return True, "All manifest files verified successfully post-extraction.", {"verified_count": len(manifest_files)}
+                    if member.issym():
+                        if not self.allow_symlinks:
+                            raise ValueError(f"Archive contains forbidden symbolic link: {member.name}")
+                        # If allowed, check target
+                        link_target = member.linkname
+                        if ".." in link_target or link_target.startswith("/") or re.match(r"^[a-zA-Z]:", link_target):
+                            raise ValueError(f"Symbolic link escapes extraction target: {member.name} -> {link_target}")
+
+                    elif member.islnk():
+                        if not self.allow_hardlinks:
+                            raise ValueError(f"Archive contains forbidden hard link: {member.name}")
+                        link_target = member.linkname
+                        if ".." in link_target or link_target.startswith("/") or re.match(r"^[a-zA-Z]:", link_target):
+                            raise ValueError(f"Hard link escapes extraction target: {member.name} -> {link_target}")
+
+                    elif member.isdev() or member.ischr() or member.isblk() or member.isfifo():
+                        raise ValueError(f"Archive contains forbidden special device entry: {member.name}")
+
+                    elif member.isreg():
+                        file_count += 1
+                        if file_count > self.max_files:
+                            raise ValueError(f"Archive file count exceeded maximum limit ({self.max_files}).")
+
+                        if member.size > self.max_file_size:
+                            raise ValueError(f"Archive member {member.name} size ({member.size}) exceeds limit ({self.max_file_size}).")
+
+                        total_bytes += member.size
+                        if total_bytes > self.max_total_bytes:
+                            raise ValueError(f"Total extracted bytes ({total_bytes}) exceeds limit ({self.max_total_bytes}).")
+
+                # Check compression expansion ratio
+                expansion_ratio = total_bytes / max(archive_size, 1)
+                if expansion_ratio > self.max_expansion_ratio:
+                    raise ValueError(
+                        f"Decompression expansion ratio ({expansion_ratio:.1f}x) exceeds limit ({self.max_expansion_ratio:.1f}x)."
+                    )
+
+                # Extract validated members member-by-member
+                for member in members:
+                    member_name = member.name.replace("\\", "/")
+                    dest_file_path = (quarantine_p / member_name).resolve()
+
+                    # Confirm destination remains inside quarantine root
+                    if not str(dest_file_path).startswith(str(quarantine_p)):
+                        raise ValueError(f"Extraction path escapes quarantine root: {dest_file_path}")
+
+                    if member.isdir():
+                        dest_file_path.mkdir(parents=True, exist_ok=True)
+                    elif member.isreg():
+                        dest_file_path.parent.mkdir(parents=True, exist_ok=True)
+                        extracted_f = tar.extractfile(member)
+                        if extracted_f is None:
+                            raise ValueError(f"Failed to extract regular file: {member.name}")
+                        with open(dest_file_path, "wb") as out_fp:
+                            shutil.copyfileobj(extracted_f, out_fp)
+
+            # Post-extraction file verification
+            self._verify_extracted_files(quarantine_p, manifest, strict_mode=strict_mode)
+
+            # If destination already exists, remove it cleanly
+            if dest_p.exists():
+                if dest_p.is_dir():
+                    shutil.rmtree(dest_p)
+                else:
+                    dest_p.unlink()
+
+            # Atomically move quarantine directory to target_dir
+            shutil.move(str(quarantine_p), str(dest_p))
+
+        except Exception as e:
+            # Clean up quarantine folder on failure
+            if quarantine_p.exists():
+                shutil.rmtree(quarantine_p, ignore_errors=True)
+            raise ValueError(f"Safe extraction failed: {e}") from e
+
+    def _verify_extracted_files(self, extracted_root: Path, manifest: ReleaseManifest, strict_mode: bool = True) -> None:
+        """Recalculates SHA-256 for all extracted files and verifies match with manifest."""
+        manifest_map = {f.path.replace("\\", "/"): f.sha256 for f in manifest.files}
+        found_files: set[str] = set()
+
+        for root, _, files in os.walk(extracted_root):
+            for f in files:
+                full_path = Path(root) / f
+                rel_path = os.path.relpath(full_path, extracted_root).replace("\\", "/")
+                found_files.add(rel_path)
+
+                if rel_path not in manifest_map:
+                    if strict_mode:
+                        raise ValueError(f"Extracted file '{rel_path}' is not declared in release manifest.")
+                    continue
+
+                with open(full_path, "rb") as fp:
+                    content = fp.read()
+                actual_sha = hashlib.sha256(content).hexdigest()
+                expected_sha = manifest_map[rel_path]
+
+                if actual_sha != expected_sha:
+                    raise ValueError(f"Extracted file digest mismatch for '{rel_path}': expected {expected_sha}, got {actual_sha}")
+
+        # Check for missing manifest files
+        missing_files = set(manifest_map.keys()) - found_files
+        if missing_files:
+            raise ValueError(f"Required release files missing after extraction: {sorted(missing_files)}")

@@ -1,9 +1,9 @@
 # OpenRobo Milestone 2 — Search Engine & Advanced Taxonomy Indexing Implementation Plan
 
-**Milestone:** M2 (Search Engine & Advanced Taxonomy Indexing)  
-**Status:** DRAFT / PLANNED  
-**Date:** September 16, 2026  
-**Author / Maintainer:** Tanishk Singhal  
+**Milestone:** M2 (Search Engine & Advanced Taxonomy Indexing)
+**Status:** DRAFT / PLANNED
+**Date:** September 16, 2026
+**Author / Maintainer:** Tanishk Singhal
 **Reference Architecture:** [ADR-0002: Database and Search Architecture](adr/0002-database-and-search-architecture.md)
 
 ---
@@ -70,7 +70,7 @@ The core objectives of Milestone 2 are:
 1. Enable PostgreSQL extension: `CREATE EXTENSION IF NOT EXISTS pg_trgm;`
 2. Add Generated Column to `resources`:
    ```sql
-   ALTER TABLE resources ADD COLUMN search_vector tsvector 
+   ALTER TABLE resources ADD COLUMN search_vector tsvector
    GENERATED ALWAYS AS (
      setweight(to_tsvector('english', coalesce(name, '')), 'A') ||
      setweight(to_tsvector('english', coalesce(id, '')), 'A') ||

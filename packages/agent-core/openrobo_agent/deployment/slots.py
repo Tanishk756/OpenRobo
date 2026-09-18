@@ -1,160 +1,190 @@
-"""A/B Workspace Slot Manager with atomic pointer activation and crash-consistent state tracking."""
+"""A/B Workspace Slot Manager with startup crash reconciliation and pointer verification."""
 
 import json
 import os
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Literal
 
-from openrobo_agent.deployment.models import SlotMetadata, SlotState
+from openrobo_agent.deployment.models import ActivationIntent, SlotMetadata, SlotsState, SlotState
 
 
 class ABSlotManager:
-    """
-    Manages dual A/B workspace partitions ('slot-a', 'slot-b') and atomic 'current' symlink switching.
-    """
+    """Manages slot partitions, active pointers, release evidence, and crash-consistent state transitions."""
 
-    SLOT_IDS: List[str] = ["slot-a", "slot-b"]
+    def __init__(self, deployment_root: Path | str) -> None:
+        self.deployment_root = Path(deployment_root).resolve()
+        self.deployment_root.mkdir(parents=True, exist_ok=True)
 
-    def __init__(self, workspaces_dir: Path):
-        self.workspaces_dir = Path(workspaces_dir).resolve()
-        self.workspaces_dir.mkdir(parents=True, exist_ok=True)
+        self.slot_a_dir = self.deployment_root / "slot-a"
+        self.slot_b_dir = self.deployment_root / "slot-b"
+        self.slot_a_dir.mkdir(parents=True, exist_ok=True)
+        self.slot_b_dir.mkdir(parents=True, exist_ok=True)
 
-        self.slot_paths = {
-            "slot-a": self.workspaces_dir / "slot-a",
-            "slot-b": self.workspaces_dir / "slot-b",
-        }
-        self.meta_paths = {
-            "slot-a": self.workspaces_dir / "slot-a.meta.json",
-            "slot-b": self.workspaces_dir / "slot-b.meta.json",
-        }
-        self.current_link = self.workspaces_dir / "current"
+        self.evidence_a_dir = self.deployment_root / "slot-a.release"
+        self.evidence_b_dir = self.deployment_root / "slot-b.release"
+        self.evidence_a_dir.mkdir(parents=True, exist_ok=True)
+        self.evidence_b_dir.mkdir(parents=True, exist_ok=True)
 
-        # Initialize slot directories and metadata if missing
-        for slot_id in self.SLOT_IDS:
-            self.slot_paths[slot_id].mkdir(parents=True, exist_ok=True)
-            if not self.meta_paths[slot_id].exists():
-                self._save_slot_meta(SlotMetadata(slot_id=slot_id, status=SlotState.EMPTY))
+        self.current_link = self.deployment_root / "current"
+        self.current_ptr_file = self.deployment_root / "current.ptr"
+        self.metadata_file = self.deployment_root / "slots.json"
+        self.intent_journal_file = self.deployment_root / "activation.intent.json"
 
-    def _load_slot_meta(self, slot_id: str) -> SlotMetadata:
-        meta_path = self.meta_paths[slot_id]
-        if not meta_path.exists():
-            return SlotMetadata(slot_id=slot_id, status=SlotState.EMPTY)
-        try:
-            data = json.loads(meta_path.read_text(encoding="utf-8"))
-            return SlotMetadata(**data)
-        except Exception:
-            return SlotMetadata(slot_id=slot_id, status=SlotState.FAILED)
+        self.is_windows = os.name == "nt"
 
-    def _save_slot_meta(self, meta: SlotMetadata) -> None:
-        meta_path = self.meta_paths[meta.slot_id]
-        temp_path = meta_path.with_suffix(".tmp")
-        temp_path.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
-        os.replace(temp_path, meta_path)
+        self.state = self._load_or_initialize_state()
+        self._reconcile_startup_state()
 
-    def get_slot_metadata(self, slot_id: str) -> SlotMetadata:
-        """Retrieve current metadata for a specific slot."""
-        if slot_id not in self.SLOT_IDS:
-            raise ValueError(f"Invalid slot identifier '{slot_id}'. Must be one of {self.SLOT_IDS}")
-        return self._load_slot_meta(slot_id)
-
-    def update_slot_metadata(self, meta: SlotMetadata) -> None:
-        """Persist updated metadata for a specific slot."""
-        self._save_slot_meta(meta)
-
-    def get_active_slot(self) -> Optional[str]:
-        """Determine currently active slot from metadata and current pointer."""
-        # 1. Inspect metadata for ACTIVE status
-        active_candidates = []
-        for slot_id in self.SLOT_IDS:
-            meta = self._load_slot_meta(slot_id)
-            if meta.status == SlotState.ACTIVE:
-                active_candidates.append(slot_id)
-
-        if len(active_candidates) == 1:
-            return active_candidates[0]
-
-        # 2. Check current link if resolution needed
-        if self.current_link.exists() or self.current_link.is_symlink():
+    def _load_or_initialize_state(self) -> SlotsState:
+        if self.metadata_file.exists():
             try:
-                target = self.current_link.resolve()
-                for slot_id, s_path in self.slot_paths.items():
-                    if target == s_path.resolve():
-                        return slot_id
+                with open(self.metadata_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return SlotsState.model_validate(data)
             except Exception:
                 pass
 
-        return active_candidates[0] if active_candidates else None
+        return SlotsState(
+            active_slot=None,
+            slots={
+                "slot-a": SlotMetadata(slot_id="slot-a", state=SlotState.EMPTY),
+                "slot-b": SlotMetadata(slot_id="slot-b", state=SlotState.EMPTY),
+            },
+        )
 
-    def get_inactive_slot(self) -> str:
-        """Return the slot that is NOT currently active."""
-        active = self.get_active_slot()
+    def _save_state(self) -> None:
+        temp_file = self.deployment_root / f"slots.json.tmp.{os.getpid()}"
+        with open(temp_file, "w", encoding="utf-8") as f:
+            f.write(self.state.model_dump_json(indent=2))
+        os.replace(temp_file, self.metadata_file)
+
+    def _read_filesystem_pointer(self) -> str | None:
+        """Reads the active slot referenced by the filesystem pointer (authoritative)."""
+        if self.current_link.exists() or self.current_link.is_symlink():
+            try:
+                target = os.readlink(self.current_link)
+                target_name = Path(target).name
+                if target_name in ("slot-a", "slot-b"):
+                    return target_name
+            except Exception:
+                pass
+
+        if self.current_ptr_file.exists():
+            try:
+                with open(self.current_ptr_file, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                if content in ("slot-a", "slot-b"):
+                    return content
+            except Exception:
+                pass
+
+        return None
+
+    def _reconcile_startup_state(self) -> None:
+        """Reconciles interrupted activation transactions and ensures metadata matches the authoritative pointer."""
+        # 1. Check activation transaction journal
+        if self.intent_journal_file.exists():
+            try:
+                with open(self.intent_journal_file, "r", encoding="utf-8") as f:
+                    intent_data = json.load(f)
+                intent = ActivationIntent.model_validate(intent_data)
+
+                # Check pointer position
+                ptr_slot = self._read_filesystem_pointer()
+                if ptr_slot == intent.to_slot:
+                    # Switch happened on disk; complete the metadata transition
+                    self.state.active_slot = intent.to_slot
+                    if intent.from_slot and intent.from_slot in self.state.slots:
+                        self.state.slots[intent.from_slot].state = SlotState.PREVIOUS
+                    if intent.to_slot in self.state.slots:
+                        self.state.slots[intent.to_slot].state = SlotState.ACTIVE
+                    self._save_state()
+                elif intent.from_slot and ptr_slot == intent.from_slot:
+                    # Switch did not happen; restore from_slot as ACTIVE, to_slot as VERIFIED/FAILED
+                    self.state.active_slot = intent.from_slot
+                    if intent.from_slot in self.state.slots:
+                        self.state.slots[intent.from_slot].state = SlotState.ACTIVE
+                    if intent.to_slot in self.state.slots and self.state.slots[intent.to_slot].state == SlotState.ACTIVE:
+                        self.state.slots[intent.to_slot].state = SlotState.VERIFIED
+                    self._save_state()
+
+                # Clean up resolved journal
+                self.intent_journal_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        # 2. Reconcile metadata with authoritative filesystem pointer
+        fs_active = self._read_filesystem_pointer()
+        if fs_active:
+            self.state.active_slot = fs_active
+            for sid, meta in self.state.slots.items():
+                if sid == fs_active and meta.state != SlotState.ACTIVE:
+                    meta.state = SlotState.ACTIVE
+                elif sid != fs_active and meta.state == SlotState.ACTIVE:
+                    meta.state = SlotState.PREVIOUS
+            self._save_state()
+
+    def get_slot_dir(self, slot_id: Literal["slot-a", "slot-b"]) -> Path:
+        if slot_id == "slot-a":
+            return self.slot_a_dir
+        elif slot_id == "slot-b":
+            return self.slot_b_dir
+        raise ValueError(f"Invalid slot ID: {slot_id}")
+
+    def get_evidence_dir(self, slot_id: Literal["slot-a", "slot-b"]) -> Path:
+        if slot_id == "slot-a":
+            return self.evidence_a_dir
+        elif slot_id == "slot-b":
+            return self.evidence_b_dir
+        raise ValueError(f"Invalid slot ID: {slot_id}")
+
+    def get_active_slot_id(self) -> str | None:
+        return self._read_filesystem_pointer() or self.state.active_slot
+
+    def get_inactive_slot_id(self) -> Literal["slot-a", "slot-b"]:
+        active = self.get_active_slot_id()
         if active == "slot-a":
             return "slot-b"
         return "slot-a"
 
-    def get_previous_slot(self) -> Optional[str]:
-        """Return slot currently marked as PREVIOUS (rollback candidate)."""
-        for slot_id in self.SLOT_IDS:
-            meta = self._load_slot_meta(slot_id)
-            if meta.status == SlotState.PREVIOUS:
-                return slot_id
-        return None
+    def get_slot_metadata(self, slot_id: str) -> SlotMetadata | None:
+        return self.state.slots.get(slot_id)
 
-    def prepare_staging_slot(self, slot_id: str) -> Path:
-        """Clear inactive slot directory and mark status as STAGING."""
-        if slot_id not in self.SLOT_IDS:
-            raise ValueError(f"Invalid slot ID '{slot_id}'")
+    def update_slot_metadata(self, slot_id: str, **kwargs) -> SlotMetadata:
+        if slot_id not in self.state.slots:
+            self.state.slots[slot_id] = SlotMetadata(slot_id=slot_id)
+        current = self.state.slots[slot_id]
+        updated = current.model_copy(update=kwargs)
+        self.state.slots[slot_id] = updated
+        self._save_state()
+        return updated
 
-        active = self.get_active_slot()
-        if slot_id == active:
-            raise RuntimeError(f"Cannot prepare active slot '{slot_id}' for staging. Active slot is protected.")
+    def clear_slot(self, slot_id: Literal["slot-a", "slot-b"]) -> None:
+        active = self.get_active_slot_id()
+        if active == slot_id:
+            raise PermissionError(f"Cannot clear currently ACTIVE slot '{slot_id}'.")
 
-        slot_dir = self.slot_paths[slot_id]
-        if slot_dir.exists():
-            shutil.rmtree(slot_dir)
-        slot_dir.mkdir(parents=True, exist_ok=True)
+        sdir = self.get_slot_dir(slot_id)
+        if sdir.exists():
+            shutil.rmtree(sdir)
+        sdir.mkdir(parents=True, exist_ok=True)
 
-        meta = SlotMetadata(slot_id=slot_id, status=SlotState.STAGING)
-        self._save_slot_meta(meta)
-        return slot_dir
+        edir = self.get_evidence_dir(slot_id)
+        if edir.exists():
+            shutil.rmtree(edir)
+        edir.mkdir(parents=True, exist_ok=True)
 
-    def switch_active_pointer(self, target_slot_id: str) -> None:
-        """
-        Atomically point 'current' symlink / junction to the target slot.
-        """
-        temp_link = self.workspaces_dir / "current.tmp"
-
-        # Remove existing temp link if lingering from previous crash
-        if temp_link.exists() or temp_link.is_symlink():
-            try:
-                if temp_link.is_dir() and not temp_link.is_symlink():
-                    shutil.rmtree(temp_link)
-                else:
-                    temp_link.unlink()
-            except Exception:
-                pass
-
-        try:
-            # Create relative symlink if supported
-            os.symlink(target_slot_id, temp_link, target_is_directory=True)
-            os.replace(temp_link, self.current_link)
-        except (OSError, NotImplementedError, Exception):
-            # Fallback for Windows environments without developer mode / symlink privileges:
-            # Copy or directory link pointer
-            if self.current_link.exists() or self.current_link.is_symlink():
-                try:
-                    if self.current_link.is_dir() and not self.current_link.is_symlink():
-                        shutil.rmtree(self.current_link)
-                    else:
-                        self.current_link.unlink()
-                except Exception:
-                    pass
-            try:
-                os.symlink(target_slot_id, self.current_link, target_is_directory=True)
-            except Exception:
-                # If symlink creation fails completely on Windows, persist pointer text file
-                pointer_file = self.workspaces_dir / "current.ptr"
-                temp_ptr = self.workspaces_dir / "current.ptr.tmp"
-                temp_ptr.write_text(target_slot_id, encoding="utf-8")
-                os.replace(temp_ptr, pointer_file)
+        self.update_slot_metadata(
+            slot_id,
+            state=SlotState.EMPTY,
+            release_id=None,
+            release_version=None,
+            artifact_digest=None,
+            manifest_digest=None,
+            workspace_digest=None,
+            key_id=None,
+            installed_at=None,
+            verified_at=None,
+            activated_at=None,
+        )

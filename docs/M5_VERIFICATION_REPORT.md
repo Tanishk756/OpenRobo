@@ -1,10 +1,10 @@
 # Milestone 5 — Verification & Completion Report
 
-**Milestone:** M5 — Workspace & Deployment Generation  
-**Project:** OpenRobo  
-**Maintainer:** Tanishk Singhal  
-**Date:** September 17, 2026  
-**Status:** COMPLETED & VERIFIED ✅  
+**Milestone:** M5 — Workspace & Deployment Generation
+**Project:** OpenRobo
+**Maintainer:** Tanishk Singhal
+**Date:** September 17, 2026
+**Status:** COMPLETED & VERIFIED ✅
 
 ---
 

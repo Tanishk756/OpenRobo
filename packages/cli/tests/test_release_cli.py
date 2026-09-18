@@ -1,57 +1,63 @@
-"""Unit tests for release and agent deployment CLI commands."""
+"""CLI integration tests for openrobo release and openrobo agent deployment."""
 
+from openrobo_agent.cli import agent_app
 from openrobo_cli.main import app
 from typer.testing import CliRunner
 
 runner = CliRunner()
 
 
-def test_cli_release_build_and_verify(tmp_path):
-    """Test 'openrobo release build' and 'openrobo release verify' through CLI runner."""
-    ws_dir = tmp_path / "cli_ws"
-    ws_dir.mkdir()
-    (ws_dir / "main.py").write_text("print('cli build')", encoding="utf-8")
-    dist_dir = tmp_path / "dist"
+def test_release_build_and_verify_cli(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
 
-    res_build = runner.invoke(app, [
-        "release", "build", str(ws_dir),
-        "--output-dir", str(dist_dir),
-        "--release-id", "rel-cli-test",
-        "--version", "1.0.0",
-        "--key-id", "cli-test-key",
-    ])
+    # Generate development key via CLI
+    keys_dir = tmp_path / "keys"
+    res_gen = runner.invoke(app, ["release", "key", "generate", "--dev", "--output-dir", str(keys_dir), "--key-id", "my-key"])
+    assert res_gen.exit_code == 0
+    assert (keys_dir / "my-key.key").exists()
+
+    # Workspace
+    ws = tmp_path / "my_ws"
+    ws.mkdir()
+    (ws / "package.xml").write_text("<package><name>cli_pkg</name></package>", encoding="utf-8")
+
+    dist = tmp_path / "dist"
+
+    # Build release with explicit private key
+    res_build = runner.invoke(
+        app,
+        [
+            "release", "build", str(ws),
+            "--output-dir", str(dist),
+            "--private-key", str(keys_dir / "my-key.key"),
+            "--key-id", "my-key",
+            "--release-id", "rel-cli-01",
+            "--os", "any",
+            "--arch", "any",
+        ],
+    )
     assert res_build.exit_code == 0
-    assert "Release Package Built Successfully" in res_build.stdout
+    assert (dist / "openrobo-rel-cli-01.tar.gz").exists()
+    assert (dist / "openrobo-rel-cli-01.manifest.json").exists()
+    assert (dist / "openrobo-rel-cli-01.sig").exists()
 
-    manifest_file = dist_dir / "rel-cli-test.manifest.json"
-    sig_file = dist_dir / "rel-cli-test.sig"
-    pub_file = dist_dir / "cli-test-key.pub.pem"
-    art_file = dist_dir / "rel-cli-test.tar.gz"
-
-    assert manifest_file.exists()
-    assert sig_file.exists()
-    assert pub_file.exists()
-    assert art_file.exists()
-
-    res_verify = runner.invoke(app, [
-        "release", "verify",
-        str(manifest_file),
-        str(sig_file),
-        "--public-key", str(pub_file),
-        "--artifact", str(art_file),
-    ])
-    assert res_verify.exit_code == 0
-    assert "VERIFICATION SUCCESSFUL" in res_verify.stdout
+    # Verify release with trust directory
+    res_ver = runner.invoke(
+        app,
+        [
+            "release", "verify",
+            str(dist / "openrobo-rel-cli-01.manifest.json"),
+            str(dist / "openrobo-rel-cli-01.sig"),
+            "--trust-dir", str(keys_dir),
+        ],
+    )
+    assert res_ver.exit_code == 0
+    assert "VALID" in res_ver.output
 
 
-def test_cli_agent_deployment_slots(tmp_path):
-    """Test 'openrobo agent deployment slots' command."""
-    state_dir = tmp_path / "agent_state"
-    res = runner.invoke(app, [
-        "agent", "deployment", "slots",
-        "--state-dir", str(state_dir),
-    ])
+def test_agent_deployment_slots_cli(tmp_path):
+    dep_root = tmp_path / "agent_deploy"
+    res = runner.invoke(agent_app, ["deployment", "slots", "--root", str(dep_root)])
     assert res.exit_code == 0
-    assert "OpenRobo A/B Workspace Deployment Slots" in res.stdout
-    assert "slot-a" in res.stdout
-    assert "slot-b" in res.stdout
+    assert "slot-a" in res.output
+    assert "slot-b" in res.output

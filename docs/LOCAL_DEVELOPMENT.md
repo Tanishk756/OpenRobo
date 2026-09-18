@@ -37,7 +37,7 @@ pnpm run check
 pnpm run dev:api
 # Or: python -m uvicorn apps.api.main:app --reload --port 8000
 ```
-Interactive OpenAPI Docs: [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)  
+Interactive OpenAPI Docs: [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)
 Health Endpoint: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
 
 ### Start Web Frontend (Next.js 14)
@@ -45,7 +45,7 @@ Health Endpoint: [http://localhost:8000/api/v1/health](http://localhost:8000/api
 pnpm run dev:web
 # Or: pnpm --filter openrobo-web run dev
 ```
-Web App: [http://localhost:3000](http://localhost:3000)  
+Web App: [http://localhost:3000](http://localhost:3000)
 Resource Explorer: [http://localhost:3000/resources](http://localhost:3000/resources)
 
 ---

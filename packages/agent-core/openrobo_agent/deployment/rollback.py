@@ -1,54 +1,141 @@
-"""Mechanical rollback primitive to previous known-good workspace slot."""
+"""Rollback primitive with stored release signature re-verification, revocation checks, and content hashing."""
 
+import hashlib
+import json
+import os
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Any
 
-from openrobo_agent.deployment.models import SlotMetadata, SlotState
+from openrobo_release.models import (
+    DeploymentSafetyPolicy,
+    KeyStatus,
+    ReleaseManifest,
+)
+from openrobo_release.policy import evaluate_deployment_safety_policy
+from openrobo_release.trust_store import TrustedReleaseKeyStore
+from openrobo_release.verification import ReleaseVerifier
+
+from openrobo_agent.deployment.models import ActivationIntent, SlotState
 from openrobo_agent.deployment.slots import ABSlotManager
 
 
 def rollback_to_previous(
-    slot_manager: ABSlotManager,
-) -> Tuple[bool, str, Optional[SlotMetadata]]:
-    """
-    Execute local mechanical rollback to the preserved PREVIOUS workspace slot.
+    manager: ABSlotManager,
+    trust_store: TrustedReleaseKeyStore,
+    safety_policy: DeploymentSafetyPolicy | None = None,
+    telemetry: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """Rolls back the active partition to the PREVIOUS slot after comprehensive integrity and revocation verification."""
+    current_active = manager.get_active_slot_id()
+    if not current_active:
+        return False, "Cannot rollback: no active slot is currently identified."
 
-    Guarantees:
-    - Verifies previous slot metadata and directory existence
-    - Performs atomic pointer switch
-    - Marks previous slot as ACTIVE
-    - Marks faulted slot as FAILED
-    """
-    prev_slot_id = slot_manager.get_previous_slot()
+    # Identify previous slot
+    prev_slot_id: str | None = None
+    for sid, meta in manager.state.slots.items():
+        if sid != current_active and meta.state == SlotState.PREVIOUS:
+            prev_slot_id = sid
+            break
+
     if not prev_slot_id:
-        return False, "Rollback failed: No slot with 'PREVIOUS' status available.", None
+        return False, "Cannot rollback: no valid PREVIOUS slot partition found."
 
-    prev_meta = slot_manager.get_slot_metadata(prev_slot_id)
-    prev_dir = slot_manager.slot_paths[prev_slot_id]
+    prev_slot_dir = manager.get_slot_dir(prev_slot_id)  # type: ignore
+    prev_evidence_dir = manager.get_evidence_dir(prev_slot_id)  # type: ignore
 
-    if not prev_dir.exists() or not any(prev_dir.iterdir()):
-        return False, f"Rollback failed: Previous slot '{prev_slot_id}' directory is empty or missing.", None
+    manifest_file = prev_evidence_dir / "manifest.json"
+    sig_file = prev_evidence_dir / "signature.sig"
 
-    current_active_id = slot_manager.get_active_slot()
-    current_meta = slot_manager.get_slot_metadata(current_active_id) if current_active_id else None
+    if not manifest_file.exists() or not sig_file.exists():
+        manager.update_slot_metadata(prev_slot_id, state=SlotState.FAILED)
+        return False, f"Rollback blocked: missing release verification evidence in {prev_evidence_dir}"
 
-    # Perform Atomic Pointer Switch back to previous slot
+    # 1. Load Stored Manifest & Signature
     try:
-        slot_manager.switch_active_pointer(prev_slot_id)
+        with open(manifest_file, "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+        manifest = ReleaseManifest.model_validate(manifest_data)
+        with open(sig_file, "r", encoding="utf-8") as f:
+            detached_sig = f.read().strip()
     except Exception as e:
-        return False, f"Atomic rollback pointer switch failed: {e}", None
+        manager.update_slot_metadata(prev_slot_id, state=SlotState.FAILED)
+        return False, f"Rollback blocked: failed to parse stored release evidence: {e}"
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    # 2. Check Key Revocation in Trust Store
+    trusted_key = trust_store.get_trusted_key(manifest.release_key_id)
+    if not trusted_key:
+        manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+        return False, f"Rollback blocked: signing key '{manifest.release_key_id}' is no longer in the trusted release key store."
 
-    # Demote faulted slot to FAILED
-    if current_meta and current_active_id != prev_slot_id:
-        current_meta.status = SlotState.FAILED
-        current_meta.details["failed_reason"] = "Rolled back to previous release"
-        slot_manager.update_slot_metadata(current_meta)
+    if trusted_key.status == KeyStatus.REVOKED:
+        manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+        return False, f"Rollback blocked: signing key '{manifest.release_key_id}' for previous release has been revoked."
 
-    # Promote previous slot to ACTIVE
-    prev_meta.status = SlotState.ACTIVE
-    prev_meta.activated_at = now_iso
-    slot_manager.update_slot_metadata(prev_meta)
+    # 3. Cryptographic Signature Re-verification
+    verifier = ReleaseVerifier(trust_store=trust_store)
+    sig_res = verifier.verify_manifest_signature(manifest, detached_sig)
+    if not sig_res.is_valid:
+        manager.update_slot_metadata(prev_slot_id, state=SlotState.FAILED)
+        return False, f"Rollback blocked: signature verification of previous manifest failed: {sig_res.details}"
 
-    return True, f"Successfully rolled back to release '{prev_meta.release_id}' on {prev_slot_id}.", prev_meta
+    # 4. Full File-by-File Hash Re-verification of Previous Slot Directory
+    manifest_map = {f.path.replace("\\", "/"): f.sha256 for f in manifest.files}
+    for rel_path, expected_sha in manifest_map.items():
+        file_path = prev_slot_dir / rel_path
+        if not file_path.exists():
+            manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+            return False, f"Rollback blocked: previous slot is corrupted; missing file '{rel_path}'."
+        with open(file_path, "rb") as fp:
+            content = fp.read()
+        actual_sha = hashlib.sha256(content).hexdigest()
+        if actual_sha != expected_sha:
+            manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+            return False, f"Rollback blocked: previous slot content tampered; hash mismatch on '{rel_path}'."
+
+    # 5. Fresh Safety Evaluation
+    if safety_policy:
+        safe, reason = evaluate_deployment_safety_policy(safety_policy, telemetry)
+        if not safe:
+            return False, f"Rollback blocked by safety policy: {reason}"
+
+    # 6. Execute Crash-Consistent Pointer Switch
+    now_str = datetime.now(timezone.utc).isoformat()
+    journal_file = manager.intent_journal_file
+    temp_journal = manager.deployment_root / f"activation.intent.json.tmp.{os.getpid()}"
+
+    intent = ActivationIntent(
+        transaction_id=f"tx-rollback-{os.getpid()}",
+        from_slot=current_active,
+        to_slot=prev_slot_id,
+        release_id=manifest.release_id,
+        state="PENDING",
+        created_at=now_str,
+    )
+
+    with open(temp_journal, "w", encoding="utf-8") as f:
+        f.write(intent.model_dump_json(indent=2))
+    os.replace(temp_journal, journal_file)
+
+    current_link = manager.current_link
+    current_next = manager.deployment_root / "current.next"
+
+    if manager.is_windows:
+        with open(manager.current_ptr_file, "w", encoding="utf-8") as f:
+            f.write(prev_slot_id)
+    else:
+        if current_next.exists() or current_next.is_symlink():
+            current_next.unlink()
+        os.symlink(prev_slot_dir, current_next)
+        os.replace(current_next, current_link)
+
+    # 7. Update Metadata
+    manager.state.active_slot = prev_slot_id
+    manager.state.slots[current_active].state = SlotState.FAILED
+    manager.update_slot_metadata(
+        prev_slot_id,
+        state=SlotState.ACTIVE,
+        activated_at=now_str,
+    )
+
+    journal_file.unlink(missing_ok=True)
+    return True, f"Successfully rolled back from '{current_active}' to '{prev_slot_id}' (release: {manifest.release_id})"

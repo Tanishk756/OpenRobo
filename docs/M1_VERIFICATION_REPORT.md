@@ -1,10 +1,10 @@
 # OpenRobo M1 Registry Engine & Resource Discovery - Execution & Verification Report
 
-**Milestone:** M1 (Registry Engine & Resource Discovery)  
-**Status:** VERIFIED & COMPLETE (100% of M1 Requirements Verified)  
-**Date:** September 16, 2026  
-**Branch:** `feature/m1-registry-discovery`  
-**License Baseline:** Apache-2.0  
+**Milestone:** M1 (Registry Engine & Resource Discovery)
+**Status:** VERIFIED & COMPLETE (100% of M1 Requirements Verified)
+**Date:** September 16, 2026
+**Branch:** `feature/m1-registry-discovery`
+**License Baseline:** Apache-2.0
 
 ---
 

@@ -1,10 +1,10 @@
 # Milestone 3 Verification Report: Knowledge Graph & Compatibility Intelligence Engine
 
-**Project**: OpenRobo  
-**Date**: September 17, 2026  
-**Author / Maintainer**: Tanishk Singhal  
-**Branch**: `feature/m3-compatibility-engine`  
-**Target Milestone**: Milestone 3  Knowledge Graph & Compatibility Intelligence Engine  
+**Project**: OpenRobo
+**Date**: September 17, 2026
+**Author / Maintainer**: Tanishk Singhal
+**Branch**: `feature/m3-compatibility-engine`
+**Target Milestone**: Milestone 3  Knowledge Graph & Compatibility Intelligence Engine
 **Verification Status**: **VERIFIED / GREEN**
 
 ---

@@ -1,101 +1,119 @@
-"""Release signing engine using Ed25519 digital signatures and secure key lifecycle management."""
+"""Cryptographic signing of OpenRobo release manifests using Ed25519."""
 
 import base64
 import os
 import stat
-from datetime import datetime, timedelta, timezone
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple, Union
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 from openrobo_release.manifest import canonical_manifest_bytes
-from openrobo_release.models import ReleaseManifest, ReleaseSigningKey, TrustedReleaseKey
+from openrobo_release.models import KeyStatus, ReleaseManifest, ReleaseSigningKey
 
 
-def set_secure_file_permissions(file_path: Path) -> None:
-    """Set secure 0600 (owner read/write only) permissions on sensitive key files."""
+def validate_private_key_file(path: Path | str) -> None:
+    """Validates that a private key file exists, is regular, has safe permissions, and contains valid Ed25519 bytes."""
+    key_path = Path(path)
+    if not key_path.exists():
+        raise FileNotFoundError(f"Private key file does not exist: {key_path}")
+    if not key_path.is_file():
+        raise ValueError(f"Private key path must be a regular file: {key_path}")
+    if key_path.is_symlink():
+        raise ValueError(f"Private key path must not be a symlink: {key_path}")
+
+    size = key_path.stat().st_size
+    if size == 0 or size > 100 * 1024:
+        raise ValueError(f"Private key file size invalid ({size} bytes)")
+
+    # POSIX permissions check
+    if os.name != "nt":
+        mode = key_path.stat().st_mode
+        if mode & (stat.S_IRWXG | stat.S_IRWXO):
+            import warnings
+            warnings.warn(f"Private key file {key_path} has loose permissions ({oct(mode)}). Recommended: 0600.")
+
+    # Try loading as Ed25519
+    with open(key_path, "rb") as f:
+        raw = f.read()
     try:
-        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR)
-    except Exception:
-        pass
+        key = serialization.load_pem_private_key(raw, password=None)
+        if not isinstance(key, ed25519.Ed25519PrivateKey):
+            raise ValueError("Private key is not an Ed25519 private key.")
+    except Exception as e:
+        raise ValueError(f"Failed to parse Ed25519 private key: {e}") from e
+
+
+def generate_development_keypair(key_id: str | None = None) -> tuple[ReleaseSigningKey, bytes]:
+    """Generates a development release signing keypair when OPENROBO_DEV_RELEASE_SIGNING=true."""
+    dev_gate = os.environ.get("OPENROBO_DEV_RELEASE_SIGNING", "").lower()
+    if dev_gate not in ("true", "1", "yes"):
+        raise PermissionError(
+            "Development release signing key generation requires OPENROBO_DEV_RELEASE_SIGNING=true. "
+            "Implicit key generation is disabled in production."
+        )
+
+    priv_key = ed25519.Ed25519PrivateKey.generate()
+    pub_key = priv_key.public_key()
+
+    priv_bytes = priv_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    pub_bytes = pub_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    actual_key_id = key_id or f"dev-key-{uuid.uuid4().hex[:8]}"
+    now_str = datetime.now(timezone.utc).isoformat()
+
+    signing_key = ReleaseSigningKey(
+        key_id=actual_key_id,
+        algorithm="ed25519",
+        public_key_pem=pub_bytes.decode("utf-8"),
+        created_at=now_str,
+        status=KeyStatus.ACTIVE,
+    )
+
+    return signing_key, priv_bytes
 
 
 class ReleaseSigner:
-    """
-    Cryptographic authority for signing OpenRobo release manifests using Ed25519.
+    """Signs release manifests using an Ed25519 private key."""
 
-    In production, release signing operates in secure build/CI environments with strict key gating.
-    Development signing is protected behind OPENROBO_DEV_RELEASE_SIGNING=true.
-    """
-
-    def __init__(self, private_key_pem: Optional[str] = None, key_id: Optional[str] = None, allow_dev: bool = False):
-        self.private_key_pem = private_key_pem
+    def __init__(self, private_key_pem: bytes | str, key_id: str) -> None:
         self.key_id = key_id
+        if isinstance(private_key_pem, str):
+            private_key_pem = private_key_pem.encode("utf-8")
 
-        if not allow_dev and not private_key_pem:
-            dev_mode = os.environ.get("OPENROBO_DEV_RELEASE_SIGNING", "false").lower() in ("true", "1", "yes")
-            if not dev_mode:
-                raise PermissionError(
-                    "Development release signing is disabled. Set OPENROBO_DEV_RELEASE_SIGNING=true or supply a private key."
-                )
+        self._private_key = serialization.load_pem_private_key(private_key_pem, password=None)
+        if not isinstance(self._private_key, ed25519.Ed25519PrivateKey):
+            raise ValueError("ReleaseSigner requires an Ed25519 private key.")
+
+    def sign_manifest(self, manifest: ReleaseManifest) -> str:
+        """Signs the canonical bytes of a release manifest and returns base64 detached signature."""
+        if manifest.release_key_id != self.key_id:
+            raise ValueError(
+                f"Manifest release_key_id ({manifest.release_key_id}) does not match signer key_id ({self.key_id})."
+            )
+
+        canonical_bytes = canonical_manifest_bytes(manifest)
+        signature = self._private_key.sign(canonical_bytes)
+        return base64.b64encode(signature).decode("utf-8")
 
     @classmethod
-    def generate_keypair(cls, key_id: str, validity_days: int = 365) -> Tuple[ReleaseSigningKey, TrustedReleaseKey]:
-        """Generate a new Ed25519 release signing keypair and return (signing_key, trusted_public_key)."""
-        priv_key = ed25519.Ed25519PrivateKey.generate()
-        pub_key = priv_key.public_key()
-
-        priv_pem = priv_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        ).decode("utf-8")
-
-        pub_pem = pub_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        ).decode("utf-8")
-
-        now = datetime.now(timezone.utc)
-        expires_at = (now + timedelta(days=validity_days)).isoformat()
-
-        signing_key = ReleaseSigningKey(
-            key_id=key_id,
-            algorithm="Ed25519",
-            public_key_pem=pub_pem,
-            private_key_pem=priv_pem,
-            created_at=now.isoformat(),
-            expires_at=expires_at,
-            status="ACTIVE",
-        )
-
-        trusted_key = TrustedReleaseKey(
-            key_id=key_id,
-            algorithm="Ed25519",
-            public_key_pem=pub_pem,
-            created_at=now.isoformat(),
-            expires_at=expires_at,
-            status="ACTIVE",
-        )
-
-        return signing_key, trusted_key
-
-    def sign_bytes(self, data: bytes, private_key_pem: Optional[str] = None) -> str:
-        """Sign arbitrary raw bytes using Ed25519 and return base64-encoded signature string."""
-        pem_to_use = private_key_pem or self.private_key_pem
-        if not pem_to_use:
-            raise ValueError("No private key available for release signing.")
-
-        priv_key = serialization.load_pem_private_key(pem_to_use.encode("utf-8"), password=None)
-        if not isinstance(priv_key, ed25519.Ed25519PrivateKey):
-            raise ValueError(f"Expected Ed25519PrivateKey, got {type(priv_key).__name__}")
-
-        raw_sig = priv_key.sign(data)
-        return base64.b64encode(raw_sig).decode("utf-8")
-
-    def sign_manifest(self, manifest: Union[ReleaseManifest, dict], private_key_pem: Optional[str] = None) -> str:
-        """Canonicalize release manifest and compute detached Ed25519 base64 signature."""
-        canonical_bytes = canonical_manifest_bytes(manifest)
-        return self.sign_bytes(canonical_bytes, private_key_pem=private_key_pem)
+    def generate_keypair(cls, key_id: str | None = None, *, allow_development: bool = False) -> tuple[ReleaseSigningKey, bytes]:
+        """Explicitly generates a signing keypair. Enforces development gate if allow_development=True."""
+        if not allow_development:
+            dev_gate = os.environ.get("OPENROBO_DEV_RELEASE_SIGNING", "").lower()
+            if dev_gate not in ("true", "1", "yes"):
+                raise PermissionError(
+                    "Automatic release key generation is disabled in production. "
+                    "Provide an explicit signing authority or set OPENROBO_DEV_RELEASE_SIGNING=true."
+                )
+        return generate_development_keypair(key_id=key_id)

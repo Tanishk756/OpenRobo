@@ -1,7 +1,7 @@
 # OpenRobo — Architecture Audit & Systems Engineering Report (Revised)
 
-**Date**: 2026-08-31  
-**Author**: Principal Autonomous Engineering Team  
+**Date**: 2026-08-31
+**Author**: Principal Autonomous Engineering Team
 **Scope**: Complete repository audit, specification analysis, revised architecture design, gap analysis, and updated M0 preparation.
 
 ---
@@ -114,9 +114,9 @@ The graph represents directed relations including:
 
 ## 8. Scalability & Technical Risks
 
-1. **Recursive Graph Traversal Latency**: Deep multi-hop graph queries could slow API response times.  
+1. **Recursive Graph Traversal Latency**: Deep multi-hop graph queries could slow API response times.
    *Mitigation*: Execute recursive graph traversals using B-Tree indexed SQL `WITH RECURSIVE` queries or load subgraphs into in-memory `NetworkX` instances; cache evaluated subgraphs.
-2. **Rate Limits on External Metadata Ingestion**: Ingesting GitHub repositories may hit API rate limits.  
+2. **Rate Limits on External Metadata Ingestion**: Ingesting GitHub repositories may hit API rate limits.
    *Mitigation*: Support GitHub API tokens, HTTP `ETag` conditional caching, and background task queues.
 
 ---

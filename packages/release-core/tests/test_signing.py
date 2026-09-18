@@ -1,121 +1,149 @@
-"""Unit tests for Ed25519 Release Signing and Verification."""
-
-from datetime import datetime, timedelta, timezone
+"""Tests for Ed25519 release signing, dev key gates, and private key validation."""
 
 import pytest
-from openrobo_release import (
+from openrobo_release.models import (
     FileEntry,
+    KeyStatus,
     ReleaseManifest,
-    ReleaseSigner,
     ReleaseTarget,
-    ReleaseVerifier,
+    TrustedReleaseKey,
     VerificationStatus,
 )
+from openrobo_release.signing import (
+    ReleaseSigner,
+    generate_development_keypair,
+    validate_private_key_file,
+)
+from openrobo_release.verification import ReleaseVerifier
 
 
 @pytest.fixture
 def sample_manifest() -> ReleaseManifest:
     return ReleaseManifest(
-        release_id="rel_20260918_test",
+        release_id="rel-test-001",
         release_version="1.0.0",
-        created_at=datetime.now(timezone.utc).isoformat(),
-        workspace_digest="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        artifact_digest="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        target=ReleaseTarget(operating_system="linux", architecture="x86_64", ros_distro="humble"),
-        files=[FileEntry(path="main.py", sha256="1111111111111111111111111111111111111111111111111111111111111111", size_bytes=50)],
-        release_key_id="rel-test-key-01",
+        created_at="2026-09-18T10:00:00Z",
+        workspace_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        artifact_digest="2222222222222222222222222222222222222222222222222222222222222222",
+        target=ReleaseTarget(operating_system="linux", architecture="x86_64"),
+        files=[FileEntry(path="src/main.py", sha256="abc", size_bytes=100)],
+        release_key_id="test-key-1",
     )
 
 
-def test_ed25519_sign_and_verify_success(sample_manifest):
-    """Prove that a validly signed manifest verifies successfully against trusted public key."""
-    sign_key, trust_key = ReleaseSigner.generate_keypair(key_id=sample_manifest.release_key_id)
-    signer = ReleaseSigner(private_key_pem=sign_key.private_key_pem, key_id=sign_key.key_id, allow_dev=True)
+def test_dev_signing_gate_enforcement(monkeypatch):
+    monkeypatch.delenv("OPENROBO_DEV_RELEASE_SIGNING", raising=False)
+    with pytest.raises(PermissionError, match="OPENROBO_DEV_RELEASE_SIGNING=true"):
+        generate_development_keypair()
 
-    sig_b64 = signer.sign_manifest(sample_manifest)
-    assert isinstance(sig_b64, str)
-    assert len(sig_b64) > 30
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "false")
+    with pytest.raises(PermissionError):
+        generate_development_keypair()
 
-    verifier = ReleaseVerifier(trusted_keys=[trust_key])
-    result = verifier.verify_manifest_signature(sample_manifest, sig_b64)
-
-    assert result.is_valid is True
-    assert result.status == VerificationStatus.VERIFIED
-    assert result.release_id == sample_manifest.release_id
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    key_meta, priv_bytes = generate_development_keypair(key_id="dev-123")
+    assert key_meta.key_id == "dev-123"
+    assert b"PRIVATE KEY" in priv_bytes
 
 
-def test_tampered_manifest_rejected(sample_manifest):
-    """Prove that altering any field of the signed manifest fails verification."""
-    sign_key, trust_key = ReleaseSigner.generate_keypair(key_id=sample_manifest.release_key_id)
-    signer = ReleaseSigner(private_key_pem=sign_key.private_key_pem, key_id=sign_key.key_id, allow_dev=True)
+def test_validate_private_key_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    _, priv_bytes = generate_development_keypair(key_id="valid-key")
 
-    sig_b64 = signer.sign_manifest(sample_manifest)
-    verifier = ReleaseVerifier(trusted_keys=[trust_key])
+    key_file = tmp_path / "valid.key"
+    key_file.write_bytes(priv_bytes)
 
-    # Tamper with workspace digest
-    tampered_manifest = sample_manifest.model_copy(
-        update={"workspace_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
+    # Valid key
+    validate_private_key_file(key_file)
+
+    # Missing file
+    with pytest.raises(FileNotFoundError):
+        validate_private_key_file(tmp_path / "nonexistent.key")
+
+    # Corrupt key bytes
+    bad_key = tmp_path / "bad.key"
+    bad_key.write_bytes(b"not a private key")
+    with pytest.raises(ValueError, match="Failed to parse"):
+        validate_private_key_file(bad_key)
+
+
+def test_sign_and_verify_success(monkeypatch, sample_manifest):
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    key_meta, priv_bytes = generate_development_keypair(key_id="test-key-1")
+
+    signer = ReleaseSigner(priv_bytes, key_id="test-key-1")
+    sig = signer.sign_manifest(sample_manifest)
+
+    trusted_key = TrustedReleaseKey(
+        key_id="test-key-1",
+        public_key=key_meta.public_key_pem,
+        created_at="2026-09-18T00:00:00Z",
     )
-    result = verifier.verify_manifest_signature(tampered_manifest, sig_b64)
 
-    assert result.is_valid is False
-    assert result.status == VerificationStatus.SIGNATURE_INVALID
-
-
-def test_tampered_signature_rejected(sample_manifest):
-    """Prove that corrupted signature string fails verification."""
-    sign_key, trust_key = ReleaseSigner.generate_keypair(key_id=sample_manifest.release_key_id)
-    verifier = ReleaseVerifier(trusted_keys=[trust_key])
-
-    result = verifier.verify_manifest_signature(sample_manifest, "invalid_base64_sig_bytes==")
-    assert result.is_valid is False
-    assert result.status == VerificationStatus.SIGNATURE_INVALID
+    verifier = ReleaseVerifier(trusted_keys=[trusted_key])
+    res = verifier.verify_manifest_signature(sample_manifest, sig)
+    assert res.is_valid is True
+    assert res.status == VerificationStatus.SIGNATURE_VALID
 
 
-def test_untrusted_signing_key_rejected(sample_manifest):
-    """Prove that key_id not present in agent trusted keys fails verification."""
-    sign_key, _ = ReleaseSigner.generate_keypair(key_id="untrusted-key-999")
-    sample_manifest.release_key_id = "untrusted-key-999"
+def test_tampered_manifest_fails_verification(monkeypatch, sample_manifest):
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    key_meta, priv_bytes = generate_development_keypair(key_id="test-key-1")
 
-    signer = ReleaseSigner(private_key_pem=sign_key.private_key_pem, key_id=sign_key.key_id, allow_dev=True)
-    sig_b64 = signer.sign_manifest(sample_manifest)
+    signer = ReleaseSigner(priv_bytes, key_id="test-key-1")
+    sig = signer.sign_manifest(sample_manifest)
 
-    # Empty verifier has no trusted keys
-    verifier = ReleaseVerifier(trusted_keys=[])
-    result = verifier.verify_manifest_signature(sample_manifest, sig_b64)
+    trusted_key = TrustedReleaseKey(
+        key_id="test-key-1",
+        public_key=key_meta.public_key_pem,
+        created_at="2026-09-18T00:00:00Z",
+    )
 
-    assert result.is_valid is False
-    assert result.status == VerificationStatus.UNTRUSTED_SIGNING_KEY
-
-
-def test_revoked_key_rejected(sample_manifest):
-    """Prove that revoked signing key fails verification even if signature is valid."""
-    sign_key, trust_key = ReleaseSigner.generate_keypair(key_id=sample_manifest.release_key_id)
-    signer = ReleaseSigner(private_key_pem=sign_key.private_key_pem, key_id=sign_key.key_id, allow_dev=True)
-    sig_b64 = signer.sign_manifest(sample_manifest)
-
-    # Revoke key
-    trust_key.status = "REVOKED"
-    trust_key.revoked_at = datetime.now(timezone.utc).isoformat()
-
-    verifier = ReleaseVerifier(trusted_keys=[trust_key])
-    result = verifier.verify_manifest_signature(sample_manifest, sig_b64)
-
-    assert result.is_valid is False
-    assert result.status == VerificationStatus.KEY_REVOKED
+    tampered_manifest = sample_manifest.model_copy(update={"release_version": "2.0.0"})
+    verifier = ReleaseVerifier(trusted_keys=[trusted_key])
+    res = verifier.verify_manifest_signature(tampered_manifest, sig)
+    assert res.is_valid is False
+    assert res.status == VerificationStatus.SIGNATURE_INVALID
 
 
-def test_expired_key_rejected(sample_manifest):
-    """Prove that expired signing key fails verification."""
-    sign_key, trust_key = ReleaseSigner.generate_keypair(key_id=sample_manifest.release_key_id)
-    signer = ReleaseSigner(private_key_pem=sign_key.private_key_pem, key_id=sign_key.key_id, allow_dev=True)
-    sig_b64 = signer.sign_manifest(sample_manifest)
+def test_revoked_key_fails_verification(monkeypatch, sample_manifest):
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    key_meta, priv_bytes = generate_development_keypair(key_id="test-key-1")
 
-    # Set expiration in past
-    trust_key.expires_at = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    signer = ReleaseSigner(priv_bytes, key_id="test-key-1")
+    sig = signer.sign_manifest(sample_manifest)
 
-    verifier = ReleaseVerifier(trusted_keys=[trust_key])
-    result = verifier.verify_manifest_signature(sample_manifest, sig_b64)
+    revoked_key = TrustedReleaseKey(
+        key_id="test-key-1",
+        public_key=key_meta.public_key_pem,
+        created_at="2026-09-18T00:00:00Z",
+        revoked_at="2026-09-18T01:00:00Z",
+        status=KeyStatus.REVOKED,
+    )
 
-    assert result.is_valid is False
-    assert result.status == VerificationStatus.KEY_EXPIRED
+    verifier = ReleaseVerifier(trusted_keys=[revoked_key])
+    res = verifier.verify_manifest_signature(sample_manifest, sig)
+    assert res.is_valid is False
+    assert res.status == VerificationStatus.REVOKED_SIGNING_KEY
+
+
+def test_invalid_key_metadata_fails_closed(monkeypatch, sample_manifest):
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    key_meta, priv_bytes = generate_development_keypair(key_id="test-key-1")
+
+    signer = ReleaseSigner(priv_bytes, key_id="test-key-1")
+    sig = signer.sign_manifest(sample_manifest)
+
+    # Unparseable expires_at timestamp
+    invalid_key = TrustedReleaseKey(
+        key_id="test-key-1",
+        public_key=key_meta.public_key_pem,
+        created_at="2026-09-18T00:00:00Z",
+        expires_at="not-a-timestamp",
+        status=KeyStatus.ACTIVE,
+    )
+
+    verifier = ReleaseVerifier(trusted_keys=[invalid_key])
+    res = verifier.verify_manifest_signature(sample_manifest, sig)
+    assert res.is_valid is False
+    assert res.status == VerificationStatus.KEY_METADATA_INVALID

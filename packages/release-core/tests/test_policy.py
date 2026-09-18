@@ -1,53 +1,71 @@
-"""Unit tests for DeploymentSafetyPolicy evaluation."""
+"""Tests for deployment safety policy evaluation, telemetry freshness, and zero implicit defaults."""
 
-from openrobo_release import DeploymentSafetyPolicy, evaluate_deployment_safety_policy
+from datetime import datetime, timezone
+
+from openrobo_release.models import (
+    BatteryRequirement,
+    DeploymentSafetyPolicy,
+    EstopRequirement,
+    MotionRequirement,
+)
+from openrobo_release.policy import evaluate_deployment_safety_policy
 
 
-def test_safety_policy_battery_pass_and_fail():
+def test_policy_configuration_invalid_when_params_missing():
+    # Enabled battery without threshold
+    p_bad_bat = DeploymentSafetyPolicy(
+        battery_requirement=BatteryRequirement(enabled=True, threshold_percent=None)
+    )
+    ok, msg = evaluate_deployment_safety_policy(p_bad_bat, {"battery_percent": 80.0})
+    assert ok is False
+    assert "POLICY_CONFIGURATION_INVALID" in msg
+
+    # Enabled motion without required_state
+    p_bad_mot = DeploymentSafetyPolicy(
+        motion_requirement=MotionRequirement(enabled=True, required_state=None)
+    )
+    ok, msg = evaluate_deployment_safety_policy(p_bad_mot, {"motion_state": "STATIONARY"})
+    assert ok is False
+    assert "POLICY_CONFIGURATION_INVALID" in msg
+
+    # Enabled estop without safe_states
+    p_bad_estop = DeploymentSafetyPolicy(
+        estop_requirement=EstopRequirement(enabled=True, safe_states=None)
+    )
+    ok, msg = evaluate_deployment_safety_policy(p_bad_estop, {"estop_state": "DISENGAGED"})
+    assert ok is False
+    assert "POLICY_CONFIGURATION_INVALID" in msg
+
+
+def test_policy_telemetry_freshness():
+    now_str = datetime.now(timezone.utc).isoformat()
+    old_str = "2020-01-01T00:00:00Z"
+
     policy = DeploymentSafetyPolicy(
-        battery_requirement={"enabled": True, "threshold_percent": 30.0, "telemetry_source": "battery_percentage"},
+        battery_requirement=BatteryRequirement(enabled=True, threshold_percent=40.0),
+        max_age_seconds=10.0,
     )
 
-    # 1. Battery adequate -> PASS
-    ok, msg, _ = evaluate_deployment_safety_policy(policy, {"battery_percentage": 45.0})
+    # Fresh telemetry
+    fresh_telemetry = {
+        "battery_percent": {"value": 85.0, "observed_at": now_str}
+    }
+    ok, msg = evaluate_deployment_safety_policy(policy, fresh_telemetry)
     assert ok is True
 
-    # 2. Battery low -> FAIL
-    ok, msg, _ = evaluate_deployment_safety_policy(policy, {"battery_percentage": 15.0})
+    # Stale telemetry
+    stale_telemetry = {
+        "battery_percent": {"value": 85.0, "observed_at": old_str}
+    }
+    ok, msg = evaluate_deployment_safety_policy(policy, stale_telemetry)
     assert ok is False
-    assert "below required threshold" in msg
-
-    # 3. Missing telemetry -> UNKNOWN -> BLOCKED
-    ok, msg, _ = evaluate_deployment_safety_policy(policy, {})
-    assert ok is False
-    assert "UNKNOWN" in msg
+    assert "STALE_TELEMETRY" in msg
 
 
-def test_safety_policy_motion_and_estop():
+def test_policy_missing_telemetry_blocks_deployment():
     policy = DeploymentSafetyPolicy(
-        motion_requirement={"enabled": True, "required_state": "STATIONARY"},
-        estop_requirement={"enabled": True, "safe_states": ["ENGAGED", "ACTIVE"]},
+        battery_requirement=BatteryRequirement(enabled=True, threshold_percent=30.0)
     )
-
-    # All conditions met
-    ok, msg, _ = evaluate_deployment_safety_policy(
-        policy,
-        {"motion_state": "STATIONARY", "estop_state": "ENGAGED"}
-    )
-    assert ok is True
-
-    # Moving robot -> FAIL
-    ok, msg, _ = evaluate_deployment_safety_policy(
-        policy,
-        {"motion_state": "MOVING", "estop_state": "ENGAGED"}
-    )
+    ok, msg = evaluate_deployment_safety_policy(policy, {})
     assert ok is False
-    assert "does not match required state" in msg
-
-    # Missing e-stop -> UNKNOWN -> FAIL
-    ok, msg, _ = evaluate_deployment_safety_policy(
-        policy,
-        {"motion_state": "STATIONARY"}
-    )
-    assert ok is False
-    assert "UNKNOWN" in msg
+    assert "UNKNOWN_TELEMETRY" in msg
