@@ -1,89 +1,149 @@
-"""Platform-specific pre-flight safety policy evaluation."""
+"""Platform-specific deployment safety policy evaluation with telemetry freshness checks and zero implicit defaults."""
 
-from typing import Any, Dict, Tuple
+from datetime import datetime, timezone
+from typing import Any
 
 from openrobo_release.models import DeploymentSafetyPolicy
 
 
+def _parse_iso_datetime(dt_str: str) -> datetime | None:
+    try:
+        if dt_str.endswith("Z"):
+            dt_str = dt_str[:-1] + "+00:00"
+        return datetime.fromisoformat(dt_str)
+    except Exception:
+        return None
+
+
+def is_telemetry_fresh(observed_at_str: str | None, max_age_seconds: float) -> tuple[bool, str]:
+    """Checks if telemetry observation timestamp is fresh within max_age_seconds."""
+    if not observed_at_str:
+        return False, "Telemetry missing observed_at timestamp"
+
+    obs_dt = _parse_iso_datetime(observed_at_str)
+    if obs_dt is None:
+        return False, f"Unparseable observed_at timestamp: {observed_at_str}"
+
+    now = datetime.now(timezone.utc)
+    age = (now - obs_dt).total_seconds()
+    if age < 0:
+        # Clock skew tolerance or future timestamp
+        return True, "Fresh"
+    if age > max_age_seconds:
+        return False, f"Telemetry is stale ({age:.1f}s > {max_age_seconds:.1f}s)"
+
+    return True, "Fresh"
+
+
 def evaluate_deployment_safety_policy(
     policy: DeploymentSafetyPolicy,
-    telemetry_state: Dict[str, Any],
-) -> Tuple[bool, str, Dict[str, Any]]:
-    """
-    Evaluate platform-specific pre-flight safety gates against current robot telemetry.
+    telemetry: dict[str, Any] | None,
+) -> tuple[bool, str]:
+    """Evaluates platform-specific safety requirements against device telemetry with zero implicit robot defaults."""
+    if telemetry is None:
+        telemetry = {}
 
-    Strict Invariant:
-    If any enabled safety requirement's telemetry is missing, stale, or unrecognized,
-    the evaluation returns UNKNOWN and blocks deployment.
-    """
-    details: Dict[str, Any] = {}
+    max_age = policy.max_age_seconds
 
     # 1. Battery Requirement
-    if policy.battery_requirement and policy.battery_requirement.get("enabled", False):
-        threshold = policy.battery_requirement.get("threshold_percent")
-        source = policy.battery_requirement.get("telemetry_source", "battery_percentage")
+    if policy.battery_requirement.enabled:
+        req = policy.battery_requirement
+        if req.threshold_percent is None:
+            return False, "POLICY_CONFIGURATION_INVALID: battery_requirement is enabled but threshold_percent is not configured"
 
-        val = telemetry_state.get(source)
-        if val is None:
-            val = telemetry_state.get("battery_percentage")
+        source_key = req.telemetry_source or "battery_percent"
+        battery_data = telemetry.get(source_key)
+
+        if battery_data is None:
+            return False, f"UNKNOWN_TELEMETRY: Required battery telemetry '{source_key}' is missing"
+
+        # Check freshness if telemetry is dict with observed_at
+        if isinstance(battery_data, dict):
+            val = battery_data.get("value")
+            obs = battery_data.get("observed_at")
+            fresh, reason = is_telemetry_fresh(obs, max_age)
+            if not fresh:
+                return False, f"STALE_TELEMETRY: Battery telemetry stale: {reason}"
+        else:
+            val = battery_data
+            # Check global telemetry observed_at
+            if "observed_at" in telemetry:
+                fresh, reason = is_telemetry_fresh(telemetry["observed_at"], max_age)
+                if not fresh:
+                    return False, f"STALE_TELEMETRY: Telemetry stale: {reason}"
 
         if val is None:
-            return False, f"Safety check failed: Battery telemetry source '{source}' is UNKNOWN.", {"field": source, "status": "UNKNOWN"}
+            return False, f"UNKNOWN_TELEMETRY: Battery value is null for key '{source_key}'"
 
         try:
-            battery_pct = float(val)
+            val_float = float(val)
         except (ValueError, TypeError):
-            return False, f"Safety check failed: Battery telemetry value '{val}' is invalid.", {"field": source, "value": val}
+            return False, f"UNKNOWN_TELEMETRY: Invalid numeric value for battery: {val}"
 
-        details["battery_percentage"] = battery_pct
-        details["battery_threshold"] = threshold
-
-        if threshold is not None and battery_pct < float(threshold):
-            return False, f"Safety check failed: Battery level {battery_pct:.1f}% is below required threshold {threshold}%.", details
+        if val_float < req.threshold_percent:
+            return False, f"POLICY_FAILED: Battery level {val_float}% is below required threshold {req.threshold_percent}%"
 
     # 2. Motion Requirement
-    if policy.motion_requirement and policy.motion_requirement.get("enabled", False):
-        req_state = str(policy.motion_requirement.get("required_state", "STATIONARY")).upper()
-        source = policy.motion_requirement.get("telemetry_source", "motion_state")
-        max_vel = policy.motion_requirement.get("max_linear_velocity")
+    if policy.motion_requirement.enabled:
+        req = policy.motion_requirement
+        if not req.required_state:
+            return False, "POLICY_CONFIGURATION_INVALID: motion_requirement is enabled but required_state is not configured"
 
-        current_state = telemetry_state.get(source)
-        if current_state is None:
-            current_state = telemetry_state.get("motion_state")
+        source_key = req.telemetry_source or "motion_state"
+        motion_data = telemetry.get(source_key)
 
-        if current_state is None:
-            return False, f"Safety check failed: Motion telemetry source '{source}' is UNKNOWN.", {"field": source, "status": "UNKNOWN"}
+        if motion_data is None:
+            return False, f"UNKNOWN_TELEMETRY: Required motion telemetry '{source_key}' is missing"
 
-        details["motion_state"] = str(current_state).upper()
-        details["required_motion_state"] = req_state
+        if isinstance(motion_data, dict):
+            val = motion_data.get("value")
+            obs = motion_data.get("observed_at")
+            fresh, reason = is_telemetry_fresh(obs, max_age)
+            if not fresh:
+                return False, f"STALE_TELEMETRY: Motion telemetry stale: {reason}"
+        else:
+            val = motion_data
+            if "observed_at" in telemetry:
+                fresh, reason = is_telemetry_fresh(telemetry["observed_at"], max_age)
+                if not fresh:
+                    return False, f"STALE_TELEMETRY: Telemetry stale: {reason}"
 
-        if str(current_state).upper() != req_state:
-            msg = f"Safety check failed: Current motion state '{current_state}' does not match required state '{req_state}'."
-            return False, msg, details
+        if val is None:
+            return False, f"UNKNOWN_TELEMETRY: Motion state is null for key '{source_key}'"
 
-        if max_vel is not None:
-            vel = telemetry_state.get("linear_velocity")
-            if vel is not None:
-                details["linear_velocity"] = float(vel)
-                if float(vel) > float(max_vel):
-                    return False, f"Safety check failed: Linear velocity {vel} exceeds max limit {max_vel}.", details
+        if str(val).upper() != req.required_state.upper():
+            return False, f"POLICY_FAILED: Current motion state '{val}' does not match required state '{req.required_state}'"
 
-    # 3. E-Stop Requirement
-    if policy.estop_requirement and policy.estop_requirement.get("enabled", False):
-        safe_states = [str(s).upper() for s in policy.estop_requirement.get("safe_states", ["ENGAGED", "ACTIVE", "TRUE"])]
-        source = policy.estop_requirement.get("state_source", "estop_state")
+    # 3. Emergency Stop Requirement
+    if policy.estop_requirement.enabled:
+        req = policy.estop_requirement
+        if not req.safe_states:
+            return False, "POLICY_CONFIGURATION_INVALID: estop_requirement is enabled but safe_states list is empty or not configured"
 
-        estop_val = telemetry_state.get(source)
-        if estop_val is None:
-            estop_val = telemetry_state.get("estop_state")
+        source_key = req.state_source or "estop_state"
+        estop_data = telemetry.get(source_key)
 
-        if estop_val is None:
-            return False, f"Safety check failed: E-Stop telemetry source '{source}' is UNKNOWN.", {"field": source, "status": "UNKNOWN"}
+        if estop_data is None:
+            return False, f"UNKNOWN_TELEMETRY: Required E-stop telemetry '{source_key}' is missing"
 
-        details["estop_state"] = str(estop_val).upper()
-        details["safe_estop_states"] = safe_states
+        if isinstance(estop_data, dict):
+            val = estop_data.get("value")
+            obs = estop_data.get("observed_at")
+            fresh, reason = is_telemetry_fresh(obs, max_age)
+            if not fresh:
+                return False, f"STALE_TELEMETRY: E-stop telemetry stale: {reason}"
+        else:
+            val = estop_data
+            if "observed_at" in telemetry:
+                fresh, reason = is_telemetry_fresh(telemetry["observed_at"], max_age)
+                if not fresh:
+                    return False, f"STALE_TELEMETRY: Telemetry stale: {reason}"
 
-        if str(estop_val).upper() not in safe_states:
-            return False, f"Safety check failed: E-Stop state '{estop_val}' is not in safe states {safe_states}.", details
+        if val is None:
+            return False, f"UNKNOWN_TELEMETRY: E-stop state is null for key '{source_key}'"
 
-    return True, "Pre-flight safety policy verified.", details
+        safe_states_upper = [s.upper() for s in req.safe_states]
+        if str(val).upper() not in safe_states_upper:
+            return False, f"POLICY_FAILED: E-stop state '{val}' is not in configured safe states {req.safe_states}"
+
+    return True, "Safety policy passed"
