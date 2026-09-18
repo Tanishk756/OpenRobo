@@ -26,6 +26,7 @@ class RosEnvironmentDetector:
         rclpy_available = False
         try:
             import rclpy  # noqa: F401
+
             rclpy_available = True
         except (ImportError, Exception):
             rclpy_available = False

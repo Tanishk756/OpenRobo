@@ -43,9 +43,7 @@ class ConnectionComparator:
                 contract = raw_contract
 
         # 2. Build graph diagnostics
-        node_healths, connection_diags = self.inspector.build_diagnostics_from_graph(
-            observed_nodes, observed_topics
-        )
+        node_healths, connection_diags = self.inspector.build_diagnostics_from_graph(observed_nodes, observed_topics)
 
         observed_node_map = {n.name.lstrip("/").lower(): n for n in node_healths}
         observed_topic_map = {c.topic: c for c in connection_diags}
@@ -95,9 +93,7 @@ class ConnectionComparator:
 
         # Evaluate TF findings if provided
         tf_findings: List[TFDiagnostic] = []
-        expected_tf_pairs = (
-            [(t.parent, t.child) for t in contract.expected_transforms] if contract else None
-        )
+        expected_tf_pairs = [(t.parent, t.child) for t in contract.expected_transforms] if contract else None
         if observed_tfs or expected_tf_pairs:
             tf_findings = self.tf_monitor.inspect_transforms(
                 known_tfs=observed_tfs,
@@ -108,8 +104,8 @@ class ConnectionComparator:
         qos_findings: List[QoSDiagnostic] = []
         for c in connection_diags:
             if c.qos_status == QoSPolicyCompatibility.INCOMPATIBLE:
-                for pub in (c.publishers or ["unknown_pub"]):
-                    for sub in (c.subscribers or ["unknown_sub"]):
+                for pub in c.publishers or ["unknown_pub"]:
+                    for sub in c.subscribers or ["unknown_sub"]:
                         qos_findings.append(
                             QoSDiagnostic(
                                 topic=c.topic,
@@ -142,11 +138,7 @@ class ConnectionComparator:
             summary = "Runtime degraded: " + "; ".join(issues)
         else:
             overall = OverallHealthStatus.HEALTHY
-            readiness = (
-                ReadinessState.RUNTIME_VERIFIED
-                if contract_evaluated
-                else ReadinessState.STATICALLY_VALIDATED
-            )
+            readiness = ReadinessState.RUNTIME_VERIFIED if contract_evaluated else ReadinessState.STATICALLY_VALIDATED
             summary = (
                 f"Runtime verified: {len(node_healths)} nodes fulfilling runtime contract."
                 if contract_evaluated

@@ -1,6 +1,5 @@
 # Unit and integration tests for release catalog, artifact distribution, and deployment orchestration APIs.
 
-import json
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -160,6 +159,7 @@ async def test_deployment_creation_snapshot_and_approval(async_client: AsyncClie
     token = token_resp.json()["token"]
 
     from openrobo_agent.certificates import generate_agent_key_and_csr
+
     priv_pem, csr_pem = generate_agent_key_and_csr(device_id="bot-canary-01")
 
     enroll_resp = await async_client.post(
@@ -178,6 +178,7 @@ async def test_deployment_creation_snapshot_and_approval(async_client: AsyncClie
 
     # Send heartbeat with ros_distro=humble
     from datetime import datetime, timezone
+
     hb_resp = await async_client.post(
         "/api/v1/fleet/agent/heartbeat",
         json={
@@ -216,7 +217,7 @@ async def test_deployment_creation_snapshot_and_approval(async_client: AsyncClie
         },
         headers=ADMIN_HEADERS,
     )
-    assert dep_resp.status_code == 201, f'Create deployment failed: {dep_resp.text}'
+    assert dep_resp.status_code == 201, f"Create deployment failed: {dep_resp.text}"
     dep_data = dep_resp.json()
     dep_id = dep_data["id"]
     assert dep_data["status"] == "STAGING_STAGE_0"

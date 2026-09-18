@@ -66,12 +66,7 @@ class OpenRoboGraph:
         norm_predicate = normalize_predicate(edge.predicate)
         if norm_predicate not in VALID_PREDICATES:
             raise ValueError(f"Invalid predicate '{edge.predicate}'. Must be one of {VALID_PREDICATES}")
-        self.graph.add_edge(
-            edge.subject_id,
-            edge.object_id,
-            predicate=norm_predicate,
-            **(edge.properties or {})
-        )
+        self.graph.add_edge(edge.subject_id, edge.object_id, predicate=norm_predicate, **(edge.properties or {}))
 
     def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
         if node_id in self.graph:
@@ -99,9 +94,7 @@ class OpenRoboGraph:
                 dependents.append(source)
         return dependents
 
-    def get_neighbors_by_predicate(
-        self, node_id: str, predicate: str, direction: str = "out"
-    ) -> List[str]:
+    def get_neighbors_by_predicate(self, node_id: str, predicate: str, direction: str = "out") -> List[str]:
         if node_id not in self.graph:
             return []
         norm_pred = normalize_predicate(predicate)
@@ -191,9 +184,7 @@ class OpenRoboGraph:
         dfs(node_id)
         return visited
 
-    def find_path(
-        self, source_id: str, target_id: str, predicates: Optional[Set[str]] = None
-    ) -> Optional[List[str]]:
+    def find_path(self, source_id: str, target_id: str, predicates: Optional[Set[str]] = None) -> Optional[List[str]]:
         if source_id not in self.graph or target_id not in self.graph:
             return None
         if source_id == target_id:

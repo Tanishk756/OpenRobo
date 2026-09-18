@@ -2,12 +2,11 @@
 
 import hashlib
 import http.server
-import socket
 import tempfile
 import threading
 from pathlib import Path
-import pytest
 
+import pytest
 from openrobo_agent.deployment.artifact_client import (
     ArtifactClient,
     ArtifactVerificationError,

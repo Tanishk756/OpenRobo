@@ -11,6 +11,7 @@ class MujocoAdapter(SimulationAdapter):
     def detect(self) -> Dict[str, Any]:
         try:
             import mujoco  # type: ignore
+
             return {
                 "installed": True,
                 "simulator": "mujoco",

@@ -35,14 +35,16 @@ async def resolve_manifest_and_metadata(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Stack '{req.stack_id}' not found.")
 
         resources_list = []
-        for c in (stack_record.components_json or []):
+        for c in stack_record.components_json or []:
             rid = c.get("resource_id") or c.get("id") if isinstance(c, dict) else str(c)
             if rid:
-                resources_list.append({
-                    "id": rid,
-                    "name": c.get("name") or rid if isinstance(c, dict) else rid,
-                    "version": c.get("version", "1.0.0") if isinstance(c, dict) else "1.0.0",
-                })
+                resources_list.append(
+                    {
+                        "id": rid,
+                        "name": c.get("name") or rid if isinstance(c, dict) else rid,
+                        "version": c.get("version", "1.0.0") if isinstance(c, dict) else "1.0.0",
+                    }
+                )
 
         manifest = {
             "id": stack_record.id,
@@ -58,10 +60,7 @@ async def resolve_manifest_and_metadata(
             "metadata": stack_record.metadata_json or {},
         }
     else:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Either 'manifest' or 'stack_id' must be provided."
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Either 'manifest' or 'stack_id' must be provided.")
 
     # Fetch registry metadata for all resources in manifest
     resources_list = manifest.get("resources", [])

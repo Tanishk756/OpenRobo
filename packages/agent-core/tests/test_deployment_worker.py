@@ -4,8 +4,8 @@ import hashlib
 import json
 import tempfile
 from pathlib import Path
-import pytest
 
+import pytest
 from openrobo_agent.deployment.artifact_client import ArtifactClient
 from openrobo_agent.deployment.slots import ABSlotManager
 from openrobo_agent.deployment.worker import (

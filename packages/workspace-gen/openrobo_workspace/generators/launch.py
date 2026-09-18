@@ -28,9 +28,7 @@ def generate_bringup_launch(plan: WorkspaceGenerationPlan) -> GeneratedFile:
 
     for c in plan.components:
         if not c.has_adapter or not c.adapter_name:
-            generic_comments.append(
-                f"    # Component: {c.name} ({c.resource_id}) - Add custom node/include below if required"
-            )
+            generic_comments.append(f"    # Component: {c.name} ({c.resource_id}) - Add custom node/include below if required")
 
     body_snippets = "\n".join(snippets) if snippets else "    # No dedicated verified launch adapters active"
     generic_comments_str = "\n".join(generic_comments) if generic_comments else "    # All components mapped to verified launch adapters"

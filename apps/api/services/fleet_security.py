@@ -244,8 +244,7 @@ def verify_device_authorization(authenticated_device_id: str, target_device_id: 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
-                f"Cross-device access forbidden: device '{authenticated_device_id}' "
-                f"cannot access resources of device '{target_device_id}'."
+                f"Cross-device access forbidden: device '{authenticated_device_id}' cannot access resources of device '{target_device_id}'."
             ),
         )
 

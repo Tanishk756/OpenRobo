@@ -5,43 +5,35 @@ import asyncio
 import hashlib
 import http.server
 import json
+import platform
 import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
 
-import platform
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-host_os = platform.system().lower()
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
-from apps.api.database import Base, get_db
-from apps.api.main import app
-from apps.api.models.deployment import DeploymentModel, DeploymentInstructionModel
-from apps.api.services.deployment_service import DeploymentService
-from apps.api.services.fleet_security import get_rate_limiter, get_replay_manager
 from openrobo_agent.certificates import generate_agent_key_and_csr
 from openrobo_agent.deployment.artifact_client import ArtifactClient
 from openrobo_agent.deployment.slots import ABSlotManager
 from openrobo_agent.deployment.worker import DeploymentWorker, GenerationStateManager
 from openrobo_release.archive import create_deterministic_archive
 from openrobo_release.deployment_protocol import (
-    ApprovalAction,
-    DeploymentState,
     DeviceDeploymentState,
     InstructionType,
-    RolloutStrategy,
-    RolloutStrategyType,
-    TargetFilter,
 )
 from openrobo_release.models import ReleaseTarget
 from openrobo_release.signing import ReleaseSigner, generate_development_keypair
 from openrobo_release.trust_store import TrustedReleaseKeyStore
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from apps.api.database import Base, get_db
+from apps.api.main import app
+from apps.api.services.deployment_service import DeploymentService
+from apps.api.services.fleet_security import get_rate_limiter, get_replay_manager
 
 ADMIN_HEADERS = {"X-OpenRobo-Admin-Key": "test-admin-secret"}
+host_os = platform.system().lower()
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 
@@ -120,8 +112,6 @@ async def test_single_device_remote_ota_acceptance(async_client: AsyncClient):
         (ws_dir / "app.py").write_text("print('v1.0.0 active')")
 
         # 1. Generate dev signing key and build signed release
-        import platform
-        host_os = platform.system().lower()
         signing_key, priv_bytes = generate_development_keypair(key_id="key-ota-accept")
         signer = ReleaseSigner(priv_bytes, key_id="key-ota-accept")
 
@@ -136,13 +126,13 @@ async def test_single_device_remote_ota_acceptance(async_client: AsyncClient):
             release_key_id="key-ota-accept",
         )
         signer.sign_manifest(manifest)
-        manifest_bytes = manifest.model_dump_json(indent=2).encode('utf-8')
+        manifest_bytes = manifest.model_dump_json(indent=2).encode("utf-8")
         artifact_bytes = artifact_path.read_bytes()
 
         # Start real local HTTP server for artifacts
         RealArtifactHandler.manifest_bytes = manifest_bytes
         RealArtifactHandler.artifact_bytes = artifact_bytes
-        RealArtifactHandler.signature_bytes = signer.sign_manifest(manifest).encode('utf-8')
+        RealArtifactHandler.signature_bytes = signer.sign_manifest(manifest).encode("utf-8")
         server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), RealArtifactHandler)
         port = server.server_port
         server_thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -247,6 +237,7 @@ async def test_single_device_remote_ota_acceptance(async_client: AsyncClient):
             art_client = ArtifactClient(downloads_dir=base_dir / "downloads", allow_private_network=True)
 
             status_reports = []
+
             async def mock_status_reporter(rep):
                 status_reports.append(rep)
 
@@ -269,6 +260,7 @@ async def test_single_device_remote_ota_acceptance(async_client: AsyncClient):
                 assert inst.instruction_type == "STAGE_RELEASE"
 
                 from openrobo_release.deployment_protocol import DeploymentInstructionEnvelope
+
                 env = DeploymentInstructionEnvelope(
                     instruction_id=inst.id,
                     deployment_id=inst.deployment_id,
@@ -450,6 +442,7 @@ async def test_three_agent_canary_rollout_acceptance(async_client: AsyncClient):
 @pytest.mark.asyncio
 async def test_hundred_device_orchestration_simulation(async_client: AsyncClient):
     from apps.api.models.fleet import FleetDeviceModel
+
     device_ids = [f"sim-bot-{i:03d}" for i in range(100)]
     now = datetime.now(timezone.utc)
     async with async_client.session_factory() as db:
@@ -544,7 +537,7 @@ async def test_control_plane_and_agent_restart_recovery(async_client: AsyncClien
 
 @pytest.mark.asyncio
 async def test_direction_enforced_websocket_operations():
-    from apps.api.routers.fleet import FORBIDDEN_OPERATIONS, ALLOWED_OPERATIONS
+    from apps.api.routers.fleet import ALLOWED_OPERATIONS, FORBIDDEN_OPERATIONS
 
     assert "STAGE_RELEASE" in FORBIDDEN_OPERATIONS
     assert "ACTIVATE_RELEASE" in FORBIDDEN_OPERATIONS

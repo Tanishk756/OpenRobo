@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,6 +16,7 @@ def utc_now() -> datetime:
 
 class ReleaseArtifactModel(Base):
     """Authoritative release catalog storing immutable release metadata."""
+
     __tablename__ = "release_artifacts"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -43,6 +44,7 @@ class ReleaseArtifactModel(Base):
 
 class ArtifactSourceModel(Base):
     """Configured trusted artifact distribution endpoints."""
+
     __tablename__ = "artifact_sources"
 
     id: Mapped[str] = mapped_column(sa.String(64), primary_key=True)
@@ -58,6 +60,7 @@ class ArtifactSourceModel(Base):
 
 class DeploymentModel(Base):
     """Root deployment orchestration record with snapshot release evidence and rollout state."""
+
     __tablename__ = "deployments"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -76,7 +79,7 @@ class DeploymentModel(Base):
     target_ros_distro: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)
 
     rollout_strategy: Mapped[str] = mapped_column(sa.Text, nullable=False)  # JSON
-    target_filter: Mapped[str] = mapped_column(sa.Text, nullable=False)     # JSON
+    target_filter: Mapped[str] = mapped_column(sa.Text, nullable=False)  # JSON
 
     status: Mapped[str] = mapped_column(sa.String(32), default="CREATED", index=True, nullable=False)
     current_stage: Mapped[int] = mapped_column(sa.Integer, default=0, nullable=False)
@@ -108,6 +111,7 @@ class DeploymentModel(Base):
 
 class DeviceDeploymentModel(Base):
     """Per-device deployment state machine and immutable cohort target assignment."""
+
     __tablename__ = "device_deployments"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -131,13 +135,12 @@ class DeviceDeploymentModel(Base):
 
     deployment: Mapped["DeploymentModel"] = relationship("DeploymentModel", back_populates="device_deployments")
 
-    __table_args__ = (
-        sa.UniqueConstraint("deployment_id", "device_id", name="uq_deployment_device"),
-    )
+    __table_args__ = (sa.UniqueConstraint("deployment_id", "device_id", name="uq_deployment_device"),)
 
 
 class DeploymentInstructionModel(Base):
     """Durable server-side outbox storing deployment instructions until confirmed delivery."""
+
     __tablename__ = "deployment_instructions"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -165,6 +168,7 @@ class DeploymentInstructionModel(Base):
 
 class DeploymentApprovalModel(Base):
     """Operator approval audit log recording stage progression gates."""
+
     __tablename__ = "deployment_approvals"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -185,6 +189,7 @@ class DeploymentApprovalModel(Base):
 
 class DeploymentEventModel(Base):
     """Structured audit log for deployment lifecycle events."""
+
     __tablename__ = "deployment_events"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -200,6 +205,7 @@ class DeploymentEventModel(Base):
 
 class DeploymentCounterModel(Base):
     """Transactional monotonic counters (e.g. global_generation)."""
+
     __tablename__ = "deployment_counters"
 
     counter_name: Mapped[str] = mapped_column(sa.String(64), primary_key=True)

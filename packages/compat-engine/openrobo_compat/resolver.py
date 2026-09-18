@@ -142,9 +142,9 @@ class DependencyResolver:
                                 target_id=edge.object_id,
                                 conflict_type="VERSION_MISMATCH",
                                 message=(
-                                f"'{res.name}' requires '{target_res.name}' constraint "
-                                f"'{v_constraint}', but '{target_res.version}' is selected: {expl}"
-                            ),
+                                    f"'{res.name}' requires '{target_res.name}' constraint "
+                                    f"'{v_constraint}', but '{target_res.version}' is selected: {expl}"
+                                ),
                                 dependency_path=[res.id, edge.object_id],
                                 remediation=f"Update '{target_res.name}' version to satisfy constraint '{v_constraint}'.",
                             )

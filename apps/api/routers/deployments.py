@@ -2,9 +2,15 @@
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from openrobo_release.deployment_protocol import (
+    DeploymentState,
+    ReleaseSnapshot,
+    RolloutStrategy,
+    TargetFilter,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +22,6 @@ from apps.api.models.deployment import (
 )
 from apps.api.schemas.deployment import (
     DeploymentApprovalRequest,
-    DeploymentApprovalResponse,
     DeploymentCreate,
     DeploymentEventResponse,
     DeploymentResponse,
@@ -24,13 +29,6 @@ from apps.api.schemas.deployment import (
 )
 from apps.api.services.deployment_service import DeploymentService
 from apps.api.services.fleet_security import verify_admin_authorization
-from openrobo_release.deployment_protocol import (
-    ApprovalAction,
-    DeploymentState,
-    ReleaseSnapshot,
-    RolloutStrategy,
-    TargetFilter,
-)
 
 logger = logging.getLogger("openrobo.deployments.router")
 
@@ -90,7 +88,7 @@ async def create_deployment(
     except ValueError as e:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
         await db.rollback()
         logger.exception("Failed to create deployment")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
@@ -161,7 +159,7 @@ async def approve_stage_progression(
         if "Optimistic conflict" in str(e) or "mismatch" in str(e):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
+    except Exception:
         await db.rollback()
         logger.exception("Failed to approve deployment progression")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")

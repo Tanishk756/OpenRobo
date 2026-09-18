@@ -27,13 +27,21 @@ def test_release_build_and_verify_cli(tmp_path, monkeypatch):
     res_build = runner.invoke(
         app,
         [
-            "release", "build", str(ws),
-            "--output-dir", str(dist),
-            "--private-key", str(keys_dir / "my-key.key"),
-            "--key-id", "my-key",
-            "--release-id", "rel-cli-01",
-            "--os", "any",
-            "--arch", "any",
+            "release",
+            "build",
+            str(ws),
+            "--output-dir",
+            str(dist),
+            "--private-key",
+            str(keys_dir / "my-key.key"),
+            "--key-id",
+            "my-key",
+            "--release-id",
+            "rel-cli-01",
+            "--os",
+            "any",
+            "--arch",
+            "any",
         ],
     )
     assert res_build.exit_code == 0
@@ -45,10 +53,12 @@ def test_release_build_and_verify_cli(tmp_path, monkeypatch):
     res_ver = runner.invoke(
         app,
         [
-            "release", "verify",
+            "release",
+            "verify",
             str(dist / "openrobo-rel-cli-01.manifest.json"),
             str(dist / "openrobo-rel-cli-01.sig"),
-            "--trust-dir", str(keys_dir),
+            "--trust-dir",
+            str(keys_dir),
         ],
     )
     assert res_ver.exit_code == 0

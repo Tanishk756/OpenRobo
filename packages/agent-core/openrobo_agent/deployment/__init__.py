@@ -1,7 +1,7 @@
 """Local A/B workspace slot manager, staging, atomic activation, rollback, and remote deployment worker."""
 
 from openrobo_agent.deployment.activation import activate_staged_slot
-from openrobo_agent.deployment.artifact_client import ArtifactClient, SSRFValidationError, ArtifactVerificationError
+from openrobo_agent.deployment.artifact_client import ArtifactClient, ArtifactVerificationError, SSRFValidationError
 from openrobo_agent.deployment.models import ActivationIntent, SlotMetadata, SlotsState, SlotState
 from openrobo_agent.deployment.rollback import rollback_to_previous
 from openrobo_agent.deployment.slots import ABSlotManager

@@ -1,7 +1,6 @@
 # Autonomous deployment execution worker, atomic generation persistence, and A/B staging/activation runner.
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -11,11 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional
 
-from openrobo_agent.deployment.activation import activate_staged_slot
-from openrobo_agent.deployment.artifact_client import ArtifactClient
-from openrobo_agent.deployment.models import SlotState
-from openrobo_agent.deployment.slots import ABSlotManager
-from openrobo_agent.deployment.staging import stage_release_artifact
 from openrobo_release.deployment_protocol import (
     DeploymentAckEnvelope,
     DeploymentInstructionEnvelope,
@@ -25,7 +19,11 @@ from openrobo_release.deployment_protocol import (
 )
 from openrobo_release.models import ReleaseManifest
 from openrobo_release.trust_store import TrustedReleaseKeyStore
-from openrobo_release.verification import ReleaseVerifier
+
+from openrobo_agent.deployment.activation import activate_staged_slot
+from openrobo_agent.deployment.artifact_client import ArtifactClient
+from openrobo_agent.deployment.slots import ABSlotManager
+from openrobo_agent.deployment.staging import stage_release_artifact
 
 logger = logging.getLogger("openrobo.agent.worker")
 
@@ -67,9 +65,7 @@ class GenerationStateManager:
             )
         except Exception as e:
             logger.error(f"Persisted generation state at {self.path} is corrupted: {e}")
-            raise GenerationStateCorruptedError(
-                f"Generation state file {self.path} is corrupt or unparseable. Fail-safe triggered."
-            ) from e
+            raise GenerationStateCorruptedError(f"Generation state file {self.path} is corrupt or unparseable. Fail-safe triggered.") from e
 
     def record_generation(self, generation: int, deployment_id: str, instruction_digest: str) -> None:
         self.state.last_generation = generation
@@ -280,7 +276,6 @@ class DeploymentWorker:
         await self.report_status(deployment_id, generation, DeviceDeploymentState.STAGING)
 
         # 6. Extract and stage into inactive slot
-        inactive_slot = self.slot_manager.get_inactive_slot_id()
         success, msg = stage_release_artifact(
             manager=self.slot_manager,
             archive_path=artifact_path,
@@ -293,7 +288,6 @@ class DeploymentWorker:
         if not success:
             raise ValueError(f"Staging release artifact failed: {msg}")
 
-        inactive_slot = self.slot_manager.get_inactive_slot_id()
         # The staged slot is the slot that just transitioned to VERIFIED
         staged_slot = "slot-b" if self.slot_manager.get_active_slot_id() == "slot-a" else "slot-a"
 

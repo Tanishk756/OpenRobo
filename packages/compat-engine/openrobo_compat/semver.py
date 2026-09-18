@@ -51,6 +51,7 @@ def parse_semver_constraint(constraint_str: str) -> SpecifierSet:
 
     # Wildcard: 1.x or 1.* -> >=1.0.0, <2.0.0
     import re
+
     wildcard_match = re.match(r"^(\d+)\.(x|\*)$", raw, re.IGNORECASE)
     if wildcard_match:
         major = int(wildcard_match.group(1))
@@ -72,9 +73,7 @@ def parse_semver_constraint(constraint_str: str) -> SpecifierSet:
             return SpecifierSet()
 
 
-def matches_version_constraint(
-    version_str: Optional[str], constraint_str: Optional[str]
-) -> Tuple[bool, str]:
+def matches_version_constraint(version_str: Optional[str], constraint_str: Optional[str]) -> Tuple[bool, str]:
     """
     Evaluates if a given version string satisfies a semantic version constraint.
     Returns (matches: bool, explanation: str).

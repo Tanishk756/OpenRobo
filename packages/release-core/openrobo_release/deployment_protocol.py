@@ -7,12 +7,12 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
-from pydantic import BaseModel, Field, field_validator
-
+from pydantic import BaseModel, Field
 
 # ==============================================================================
 # Enums
 # ==============================================================================
+
 
 class DeploymentState(str, enum.Enum):
     # Lifecycle States
@@ -127,6 +127,7 @@ def validate_release_key_id(key_id: str) -> None:
 # ==============================================================================
 # Schemas & Envelopes
 # ==============================================================================
+
 
 class RolloutStageConfig(BaseModel):
     stage_index: int = Field(ge=0)

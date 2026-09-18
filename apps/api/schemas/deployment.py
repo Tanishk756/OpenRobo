@@ -2,13 +2,11 @@
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
 
 from openrobo_release.deployment_protocol import (
     ApprovalAction,
     DeploymentState,
     DeviceDeploymentState,
-    InstructionStatus,
     ReleaseSnapshot,
     ReleaseStatus,
     RolloutStrategy,
@@ -16,6 +14,7 @@ from openrobo_release.deployment_protocol import (
     validate_digest,
     validate_release_key_id,
 )
+from pydantic import BaseModel, Field, field_validator
 
 
 class ReleaseArtifactCreate(BaseModel):

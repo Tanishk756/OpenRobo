@@ -4,12 +4,25 @@ import hashlib
 import json
 import math
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-import sqlalchemy as sa
+from openrobo_release.deployment_protocol import (
+    ApprovalAction,
+    DeploymentState,
+    DeploymentStatusReport,
+    DeviceDeploymentState,
+    InstructionStatus,
+    InstructionType,
+    ReleaseSnapshot,
+    RolloutStrategy,
+    RolloutStrategyType,
+    TargetFilter,
+    validate_deployment_transition,
+    validate_device_transition,
+)
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
 
 from apps.api.models import (
     ArtifactSourceModel,
@@ -29,27 +42,6 @@ from apps.api.schemas.deployment import (
     ReleaseArtifactCreate,
     StageSummary,
 )
-from openrobo_release.deployment_protocol import (
-    ApprovalAction,
-    DEPLOYMENT_TRANSITIONS,
-    DEVICE_TRANSITIONS,
-    DeploymentAckEnvelope,
-    DeploymentInstructionEnvelope,
-    DeploymentState,
-    DeploymentStatusReport,
-    DeviceDeploymentState,
-    InstructionStatus,
-    InstructionType,
-    ReleaseSnapshot,
-    ReleaseStatus,
-    RolloutStrategy,
-    RolloutStrategyType,
-    TargetFilter,
-    validate_deployment_transition,
-    validate_device_transition,
-    validate_digest,
-    validate_release_key_id,
-)
 
 
 def utc_now() -> datetime:
@@ -60,11 +52,7 @@ class DeploymentService:
     @staticmethod
     async def get_next_generation(session: AsyncSession) -> int:
         # Atomically fetch and increment the global deployment generation counter.
-        stmt = (
-            select(DeploymentCounterModel)
-            .where(DeploymentCounterModel.counter_name == "global_generation")
-            .with_for_update()
-        )
+        stmt = select(DeploymentCounterModel).where(DeploymentCounterModel.counter_name == "global_generation").with_for_update()
         res = await session.execute(stmt)
         counter = res.scalar_one_or_none()
         if not counter:
@@ -312,12 +300,14 @@ class DeploymentService:
                 stage_index=stage_idx,
                 status=DeviceDeploymentState.PENDING.value,
                 generation=generation,
-                target_snapshot_json=json.dumps({
-                    "name": dev.name,
-                    "domain": dev.domain,
-                    "robot_type": dev.robot_type,
-                    "matched_stage": stage_idx,
-                }),
+                target_snapshot_json=json.dumps(
+                    {
+                        "name": dev.name,
+                        "domain": dev.domain,
+                        "robot_type": dev.robot_type,
+                        "matched_stage": stage_idx,
+                    }
+                ),
             )
             session.add(dev_dep)
 
@@ -351,12 +341,14 @@ class DeploymentService:
         event = DeploymentEventModel(
             deployment_id=deployment_id,
             event_type="DEPLOYMENT_CREATED",
-            details=json.dumps({
-                "release_id": release.release_id,
-                "total_devices": len(assignments),
-                "total_stages": total_stages,
-                "generation": generation,
-            }),
+            details=json.dumps(
+                {
+                    "release_id": release.release_id,
+                    "total_devices": len(assignments),
+                    "total_stages": total_stages,
+                    "generation": generation,
+                }
+            ),
         )
         session.add(event)
 
@@ -431,15 +423,11 @@ class DeploymentService:
             )
 
         if deployment.status != req.expected_state.value:
-            raise ValueError(
-                f"Deployment state mismatch (expected {req.expected_state.value}, current {deployment.status})."
-            )
+            raise ValueError(f"Deployment state mismatch (expected {req.expected_state.value}, current {deployment.status}).")
 
         current_stage = deployment.current_stage
         if current_stage != req.stage_index:
-            raise ValueError(
-                f"Approval stage index {req.stage_index} does not match current deployment stage {current_stage}."
-            )
+            raise ValueError(f"Approval stage index {req.stage_index} does not match current deployment stage {current_stage}.")
 
         generation = await DeploymentService.get_next_generation(session)
         deployment.generation = generation
@@ -449,12 +437,9 @@ class DeploymentService:
             target_state = DeploymentState[f"ACTIVATING_STAGE_{current_stage}"]
             validate_deployment_transition(DeploymentState(deployment.status), target_state)
 
-            dev_stmt = (
-                select(DeviceDeploymentModel)
-                .where(
-                    DeviceDeploymentModel.deployment_id == deployment_id,
-                    DeviceDeploymentModel.stage_index == current_stage,
-                )
+            dev_stmt = select(DeviceDeploymentModel).where(
+                DeviceDeploymentModel.deployment_id == deployment_id,
+                DeviceDeploymentModel.stage_index == current_stage,
             )
             dev_res = await session.execute(dev_stmt)
             for dd in dev_res.scalars().all():
@@ -486,12 +471,9 @@ class DeploymentService:
 
             deployment.current_stage = next_stage
 
-            dev_stmt = (
-                select(DeviceDeploymentModel)
-                .where(
-                    DeviceDeploymentModel.deployment_id == deployment_id,
-                    DeviceDeploymentModel.stage_index == next_stage,
-                )
+            dev_stmt = select(DeviceDeploymentModel).where(
+                DeviceDeploymentModel.deployment_id == deployment_id,
+                DeviceDeploymentModel.stage_index == next_stage,
             )
             dev_res = await session.execute(dev_stmt)
             release_snapshot = ReleaseSnapshot.model_validate_json(deployment.release_snapshot_json)
@@ -553,13 +535,15 @@ class DeploymentService:
         event = DeploymentEventModel(
             deployment_id=deployment_id,
             event_type="STAGE_APPROVAL_GRANTED",
-            details=json.dumps({
-                "action": req.action.value,
-                "approved_by": approved_by,
-                "new_state": target_state.value,
-                "stage_index": current_stage,
-                "version": deployment.version,
-            }),
+            details=json.dumps(
+                {
+                    "action": req.action.value,
+                    "approved_by": approved_by,
+                    "new_state": target_state.value,
+                    "stage_index": current_stage,
+                    "version": deployment.version,
+                }
+            ),
         )
         session.add(event)
 
@@ -570,11 +554,13 @@ class DeploymentService:
     async def cancel_remaining_devices(session: AsyncSession, deployment_id: str, generation: int) -> None:
         dev_stmt = select(DeviceDeploymentModel).where(
             DeviceDeploymentModel.deployment_id == deployment_id,
-            DeviceDeploymentModel.status.notin_([
-                DeviceDeploymentState.ACTIVE.value,
-                DeviceDeploymentState.CANCELLED.value,
-                DeviceDeploymentState.FAILED.value,
-            ]),
+            DeviceDeploymentModel.status.notin_(
+                [
+                    DeviceDeploymentState.ACTIVE.value,
+                    DeviceDeploymentState.CANCELLED.value,
+                    DeviceDeploymentState.FAILED.value,
+                ]
+            ),
         )
         dev_res = await session.execute(dev_stmt)
         for dd in dev_res.scalars().all():
@@ -633,14 +619,16 @@ class DeploymentService:
             deployment_id=report.deployment_id,
             device_id=device_id,
             event_type="DEVICE_STATUS_TRANSITION",
-            details=json.dumps({
-                "previous_state": current_state.value,
-                "new_state": new_state.value,
-                "generation": report.generation,
-                "staged_slot": report.staged_slot,
-                "active_slot": report.active_slot,
-                "error_message": report.error_message,
-            }),
+            details=json.dumps(
+                {
+                    "previous_state": current_state.value,
+                    "new_state": new_state.value,
+                    "generation": report.generation,
+                    "staged_slot": report.staged_slot,
+                    "active_slot": report.active_slot,
+                    "error_message": report.error_message,
+                }
+            ),
         )
         session.add(event)
 

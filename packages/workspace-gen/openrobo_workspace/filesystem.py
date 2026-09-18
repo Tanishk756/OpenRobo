@@ -8,14 +8,34 @@ from typing import Any, Dict, List
 from openrobo_workspace.models import GeneratedFile
 
 RESERVED_DEVICE_NAMES = {
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
 }
 
 
 class SecurityPathError(ValueError):
     """Raised when an unsafe path is encountered."""
+
     pass
 
 
@@ -64,7 +84,7 @@ def build_file_tree(files: List[GeneratedFile]) -> Dict[str, Any]:
         parts = file.path.split("/")
         current = root
         for i, part in enumerate(parts):
-            is_file = (i == len(parts) - 1)
+            is_file = i == len(parts) - 1
             if is_file:
                 current["children"][part] = {
                     "name": part,

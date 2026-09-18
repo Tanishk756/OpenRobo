@@ -41,25 +41,19 @@ def test_policy_telemetry_staleness():
     old_str = (now - timedelta(seconds=20)).isoformat()
 
     # Fresh telemetry
-    fresh_telemetry = {
-        "battery_percent": {"value": 85.0, "observed_at": fresh_str}
-    }
+    fresh_telemetry = {"battery_percent": {"value": 85.0, "observed_at": fresh_str}}
     ok, msg = evaluate_deployment_safety_policy(policy, fresh_telemetry)
     assert ok is True
 
     # Stale telemetry
-    stale_telemetry = {
-        "battery_percent": {"value": 85.0, "observed_at": old_str}
-    }
+    stale_telemetry = {"battery_percent": {"value": 85.0, "observed_at": old_str}}
     ok, msg = evaluate_deployment_safety_policy(policy, stale_telemetry)
     assert ok is False
     assert "STALE_TELEMETRY" in msg
 
 
 def test_policy_missing_telemetry_blocks_deployment():
-    policy = DeploymentSafetyPolicy(
-        battery_requirement=BatteryRequirement(enabled=True, threshold_percent=30.0)
-    )
+    policy = DeploymentSafetyPolicy(battery_requirement=BatteryRequirement(enabled=True, threshold_percent=30.0))
     ok, msg = evaluate_deployment_safety_policy(policy, {})
     assert ok is False
     assert "UNKNOWN_TELEMETRY" in msg
@@ -67,9 +61,7 @@ def test_policy_missing_telemetry_blocks_deployment():
 
 def test_scalar_telemetry_without_timestamp_rejected():
     """Bare scalar telemetry without timestamp/envelope must fail closed as STALE/UNKNOWN."""
-    policy = DeploymentSafetyPolicy(
-        battery_requirement=BatteryRequirement(enabled=True, threshold_percent=30.0)
-    )
+    policy = DeploymentSafetyPolicy(battery_requirement=BatteryRequirement(enabled=True, threshold_percent=30.0))
     # Scalar without timestamp
     scalar_telemetry = {"battery_percent": 80.0}
     ok, msg = evaluate_deployment_safety_policy(policy, scalar_telemetry)
@@ -87,17 +79,13 @@ def test_future_telemetry_skew_bounded():
 
     # 1 minute in the future
     future_str = (now + timedelta(seconds=60)).isoformat()
-    future_telemetry = {
-        "battery_percent": {"value": 85.0, "observed_at": future_str}
-    }
+    future_telemetry = {"battery_percent": {"value": 85.0, "observed_at": future_str}}
     ok, msg = evaluate_deployment_safety_policy(policy, future_telemetry)
     assert ok is False
     assert "skewed into the future" in msg or "STALE_TELEMETRY" in msg
 
     # 2 seconds in the future (within 5s tolerance)
     tolerable_future_str = (now + timedelta(seconds=2)).isoformat()
-    tolerable_telemetry = {
-        "battery_percent": {"value": 85.0, "observed_at": tolerable_future_str}
-    }
+    tolerable_telemetry = {"battery_percent": {"value": 85.0, "observed_at": tolerable_future_str}}
     ok_tol, msg_tol = evaluate_deployment_safety_policy(policy, tolerable_telemetry)
     assert ok_tol is True

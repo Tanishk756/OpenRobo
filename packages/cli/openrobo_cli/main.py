@@ -105,11 +105,14 @@ def list_devices_cmd():
 
             for d in devices:
                 status_color = (
-            "green" if d["status"] == "ONLINE"
-            else "yellow" if d["status"] == "DEGRADED"
-            else "red" if d["status"] == "REVOKED"
-            else "dim"
-        )
+                    "green"
+                    if d["status"] == "ONLINE"
+                    else "yellow"
+                    if d["status"] == "DEGRADED"
+                    else "red"
+                    if d["status"] == "REVOKED"
+                    else "dim"
+                )
                 table.add_row(
                     d["id"][:8] + "...",
                     d["name"],

@@ -112,10 +112,7 @@ class RosDistributionRule(BaseRule):
             if not common_distros:
                 c1, d1 = constrained_candidates[0]
                 c2, d2 = constrained_candidates[1]
-                msg = (
-                    f"Stack components '{c1.name}' ({', '.join(d1)}) and '{c2.name}' "
-                    f"({', '.join(d2)}) share no common ROS distribution."
-                )
+                msg = f"Stack components '{c1.name}' ({', '.join(d1)}) and '{c2.name}' ({', '.join(d2)}) share no common ROS distribution."
                 conflicts.append(
                     ConflictDetail(
                         source_id=c1.id,
@@ -283,8 +280,7 @@ class CpuArchitectureRule(BaseRule):
                         f"which does not include target '{env.cpu_architecture}'."
                     )
                     remed = (
-                        f"Target an architecture supported by '{cand.name}' ({supported}) "
-                        f"or cross-compile for '{env.cpu_architecture}'."
+                        f"Target an architecture supported by '{cand.name}' ({supported}) or cross-compile for '{env.cpu_architecture}'."
                     )
                     conflicts.append(
                         ConflictDetail(

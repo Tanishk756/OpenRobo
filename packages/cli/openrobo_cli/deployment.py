@@ -1,8 +1,7 @@
 # CLI subcommands for remote deployment orchestration and release catalog management.
 
-import json
 import os
-from typing import List, Optional
+from typing import Optional
 
 import httpx
 import typer
@@ -28,6 +27,7 @@ def get_headers() -> dict:
 
 
 # ==================== RELEASE COMMANDS ====================
+
 
 @release_cli.command("register")
 def register_release(
@@ -107,6 +107,7 @@ def list_releases():
 
 
 # ==================== DEPLOYMENT COMMANDS ====================
+
 
 @deployment_cli.command("create")
 def create_deployment(
@@ -291,7 +292,8 @@ def cancel_deployment(
         resp = httpx.post(url, headers=get_headers(), timeout=10.0)
         if resp.status_code == 200:
             d = resp.json()
-            console.print(Panel(f"[bold yellow]CANCELLED:[/bold yellow] Deployment {deployment_id} has been cancelled.\nStatus: {d['status']}", title="Deployment Cancelled"))
+            panel_msg = f"[bold yellow]CANCELLED:[/bold yellow] Deployment {deployment_id} has been cancelled.\nStatus: {d['status']}"
+            console.print(Panel(panel_msg, title="Deployment Cancelled"))
         else:
             console.print(f"[bold red]Error ({resp.status_code}):[/bold red] {resp.text}")
             raise typer.Exit(code=1)

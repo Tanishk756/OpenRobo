@@ -45,11 +45,7 @@ def test_reject_drive_letters():
 
 
 def test_reject_windows_device_names():
-    unsafe_names = [
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM9", "LPT1", "LPT9",
-        "con.txt", "aux.json", "Nul.yaml"
-    ]
+    unsafe_names = ["CON", "PRN", "AUX", "NUL", "COM1", "COM9", "LPT1", "LPT9", "con.txt", "aux.json", "Nul.yaml"]
     for name in unsafe_names:
         with pytest.raises(SecurityPathError, match="Reserved device name"):
             sanitize_relative_path(f"src/config/{name}")
@@ -80,6 +76,7 @@ def test_safe_write_workspace_containment(tmp_path):
 # ==============================================================================
 # M5.1 Security Hardening: Shell Injection & Package Name Validation
 # ==============================================================================
+
 
 def test_shell_injection_rejection_debian_packages():
     """Adversarial injection attempts in debian package names MUST be rejected."""

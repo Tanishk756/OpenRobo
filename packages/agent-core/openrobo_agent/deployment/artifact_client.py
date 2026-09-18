@@ -1,6 +1,5 @@
 """Secure asynchronous artifact client with SSRF protection, streaming verification, and quarantine management."""
 
-import asyncio
 import hashlib
 import ipaddress
 import logging
@@ -8,7 +7,7 @@ import os
 import socket
 import ssl
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -132,9 +131,7 @@ class ArtifactClient:
         ) as client:
             async with client.stream("GET", validated_url) as response:
                 if response.status_code != 200:
-                    raise ArtifactVerificationError(
-                        f"Artifact download failed with HTTP status {response.status_code}"
-                    )
+                    raise ArtifactVerificationError(f"Artifact download failed with HTTP status {response.status_code}")
 
                 content_length_header = response.headers.get("content-length")
                 declared_len: Optional[int] = None
@@ -179,17 +176,13 @@ class ArtifactClient:
         if declared_len is not None and total_bytes != declared_len:
             if part_path.exists():
                 part_path.unlink()
-            raise ArtifactVerificationError(
-                f"Content-Length mismatch: expected {declared_len} bytes, received {total_bytes} bytes"
-            )
+            raise ArtifactVerificationError(f"Content-Length mismatch: expected {declared_len} bytes, received {total_bytes} bytes")
 
         computed_digest = hasher.hexdigest().lower()
         if computed_digest != expected_digest.lower():
             if part_path.exists():
                 part_path.unlink()
-            raise ArtifactVerificationError(
-                f"Artifact digest mismatch: expected {expected_digest.lower()}, got {computed_digest}"
-            )
+            raise ArtifactVerificationError(f"Artifact digest mismatch: expected {expected_digest.lower()}, got {computed_digest}")
 
         # Atomic rename .part -> final artifact
         os.replace(part_path, final_artifact_path)
@@ -214,9 +207,7 @@ class ArtifactClient:
         ) as client:
             response = await client.get(validated_url)
             if response.status_code != 200:
-                raise ArtifactVerificationError(
-                    f"Manifest download failed with HTTP status {response.status_code}"
-                )
+                raise ArtifactVerificationError(f"Manifest download failed with HTTP status {response.status_code}")
 
             manifest_bytes = response.content
             if len(manifest_bytes) > 1048576:  # 1 MB max manifest
@@ -248,9 +239,7 @@ class ArtifactClient:
         ) as client:
             response = await client.get(validated_url)
             if response.status_code != 200:
-                raise ArtifactVerificationError(
-                    f"Signature download failed with HTTP status {response.status_code}"
-                )
+                raise ArtifactVerificationError(f"Signature download failed with HTTP status {response.status_code}")
 
             sig_text = response.text.strip()
             if len(sig_text) > 8192:

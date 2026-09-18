@@ -51,6 +51,7 @@ class HeartbeatSampler:
         # Try to sample hardware metrics safely
         try:
             import psutil
+
             cpu_percent = psutil.cpu_percent(interval=None)
             mem_percent = psutil.virtual_memory().percent
             disk_percent = psutil.disk_usage("/").percent if os.name != "nt" else psutil.disk_usage("C:\\").percent

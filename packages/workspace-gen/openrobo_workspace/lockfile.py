@@ -14,11 +14,7 @@ def compute_manifest_digest(manifest_str: str) -> str:
     return hashlib.sha256(manifest_str.encode("utf-8")).hexdigest()
 
 
-def generate_lockfile(
-    plan: WorkspaceGenerationPlan,
-    manifest_str: str,
-    generator_version: str = "0.5.1"
-) -> str:
+def generate_lockfile(plan: WorkspaceGenerationPlan, manifest_str: str, generator_version: str = "0.5.1") -> str:
     components_lock = []
     for c in sorted(plan.components, key=lambda x: x.resource_id):
         evidence_dict = None

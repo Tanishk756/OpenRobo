@@ -94,22 +94,9 @@ class WorkspacePlanner:
         metadata = self.manifest.get("metadata", {})
         user_config = self.manifest.get("configuration", {})
 
-        target_distro = (
-            target.get("ros_distro")
-            or metadata.get("target_distro")
-            or metadata.get("ros_distro")
-            or "humble"
-        )
-        target_os = (
-            target.get("os")
-            or metadata.get("target_os")
-            or "ubuntu-22.04"
-        )
-        target_arch = (
-            target.get("architecture")
-            or metadata.get("target_arch")
-            or "x86_64"
-        )
+        target_distro = target.get("ros_distro") or metadata.get("target_distro") or metadata.get("ros_distro") or "humble"
+        target_os = target.get("os") or metadata.get("target_os") or "ubuntu-22.04"
+        target_arch = target.get("architecture") or metadata.get("target_arch") or "x86_64"
 
         warnings: List[str] = []
         if compat_verdict == "CONDITIONAL":
@@ -146,11 +133,7 @@ class WorkspacePlanner:
             )
 
             # Determine Build Type
-            raw_build_type = (
-                entry_dict.get("build_type")
-                or reg_data.get("build_type")
-                or "ament_cmake"
-            )
+            raw_build_type = entry_dict.get("build_type") or reg_data.get("build_type") or "ament_cmake"
             try:
                 build_type = PackageBuildType(raw_build_type.lower())
             except ValueError:
@@ -178,10 +161,7 @@ class WorkspacePlanner:
                 source_strat = SourceStrategy.SOURCE_GIT
             else:
                 source_strat = SourceStrategy.LOCAL_EXTERNAL
-                warnings.append(
-                    f"Component '{res_id}' has no known binary release or git repository. "
-                    "Using placeholder source strategy."
-                )
+                warnings.append(f"Component '{res_id}' has no known binary release or git repository. Using placeholder source strategy.")
 
             # Identify Adapter via Deterministic Registry (NO substring matching)
             adapter_def = default_adapter_registry.get_adapter(res_id, target_distro)
@@ -218,7 +198,7 @@ class WorkspacePlanner:
                 unsupported_components.append(res_id)
                 evidence_level = GenerationEvidenceLevel.GENERIC_SCAFFOLD
                 evidence_reason = f"No verified adapter registered for '{res_id}'; generated generic ROS 2 parameter scaffold"
-                pkg_sub = res_id.split('/')[-1].replace('-', '_')
+                pkg_sub = res_id.split("/")[-1].replace("-", "_")
                 step_msg = f"{res_id}: Configure node launch and parameters in config/{pkg_sub}.yaml.example"
                 comp_manual_steps.append(step_msg)
                 manual_steps_required.append(step_msg)
@@ -270,9 +250,7 @@ class WorkspacePlanner:
 
         # Build Readiness Report
         readiness_state = (
-            WorkspaceReadinessState.BUILD_REQUIRES_CONFIGURATION
-            if manual_steps_required
-            else WorkspaceReadinessState.STATICALLY_VALIDATED
+            WorkspaceReadinessState.BUILD_REQUIRES_CONFIGURATION if manual_steps_required else WorkspaceReadinessState.STATICALLY_VALIDATED
         )
         evidence_summary = {e.resource_id: e.level.value for e in evidence_records}
 
@@ -284,10 +262,7 @@ class WorkspacePlanner:
             runtime_validation=ExecutionStatus.NOT_EXECUTED,
             manual_steps_required=manual_steps_required,
             evidence_summary=evidence_summary,
-            notes=[
-                "Static syntax & structural analysis passed.",
-                "No runtime container or colcon compilation has been executed."
-            ],
+            notes=["Static syntax & structural analysis passed.", "No runtime container or colcon compilation has been executed."],
         )
 
         return WorkspaceGenerationPlan(
