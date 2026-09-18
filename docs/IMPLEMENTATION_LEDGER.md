@@ -42,7 +42,7 @@
 
 | **M6.1** | Live Runtime Wiring, Truthful Readiness & Studio | `LIVE WIRING VERIFIED` | 131/131 Pytest, 16/16 Vitest | `docs/M6_LIVE_RUNTIME_REPORT.md` |
 
-| **M6.2** | Live Runtime Proof, End-to-End Acceptance & Colcon | `LIVE ACCEPTANCE VERIFIED` | 131/131 Pytest, 16/16 Vitest, 10/10 Live Phases | `docs/M6_LIVE_ACCEPTANCE_REPORT.md` |
+- **Status**: LIVE ACCEPTANCE VERIFIED ✅
 
 | **M7.2.1** | Signed Release Artifacts & Local A/B Deployment Foundation | `VERIFIED` | 189/189 Pytest, 19/19 Vitest, 8 M7.2.1 Tests | `docs/M7_2_1_VERIFICATION_REPORT.md` |
 
@@ -90,11 +90,11 @@
 
 
 
-### Milestone 6.2 â Live Runtime Acceptance Summary
+### Milestone 6.2 — Live Runtime Acceptance Summary
 
 - **Date**: September 17, 2026
 
-- **Status**: LIVE ACCEPTANCE VERIFIED â
+- **Status**: LIVE ACCEPTANCE VERIFIED ✅
 
 - **Evidence**:
 

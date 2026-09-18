@@ -1,7 +1,7 @@
 # Milestone 2 Verification Report: Search Engine & Advanced Taxonomy Indexing
 
 ## Executive Summary
-- **Milestone**: Milestone 2 â€” Search Engine & Advanced Taxonomy Indexing
+- **Milestone**: Milestone 2 — Search Engine & Advanced Taxonomy Indexing
 - **Status**: **VERIFIED & COMPLETE**
 - **Date**: September 2026
 - **Target Repository**: [https://github.com/Tanishk756/OpenRobo](https://github.com/Tanishk756/OpenRobo)
@@ -41,16 +41,16 @@ packages\cli\tests\test_cli.py .......                                   [100%]
 ```
  RUN  v1.6.1 C:/OpenRobo/apps/web
 
- âœ“ tests/unit/page.test.tsx  (1 test) 102ms
- âœ“ tests/unit/resources.test.tsx  (5 tests) 1392ms
+ ✓ tests/unit/page.test.tsx  (1 test) 102ms
+ ✓ tests/unit/resources.test.tsx  (5 tests) 1392ms
 
  Test Files  2 passed (2)
       Tests  6 passed (6)
 
 Route (app)                              Size     First Load JS
-â”Œ â—‹ /                                    2.43 kB        93.5 kB
-â”œ â—‹ /_not-found                          883 B          85.1 kB
-â”” â—‹ /resources                           8.27 kB        99.4 kB
+┌ ○ /                                    2.43 kB        93.5 kB
+├ ○ /_not-found                          883 B          85.1 kB
+└ ○ /resources                           8.27 kB        99.4 kB
 + First Load JS shared by all            84.3 kB
 ```
 - **Total Frontend Unit Tests**: 6 passed, 0 failed.
