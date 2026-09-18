@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "openrobo-agent"
+name = "openrobo-release"
 version = "0.7.2"
-description = "OpenRobo Secure Remote Edge Agent and Device Identity Subsystem"
+description = "OpenRobo Cryptographic Release Packaging, Verification, and Safety Subsystem"
 readme = "README.md"
 authors = [{ name = "Tanishk Singhal" }]
 license = { text = "Apache-2.0" }
@@ -13,8 +13,6 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.0.0",
     "cryptography>=42.0.0",
-    "openrobo-runtime>=0.6.1",
-    "openrobo-release>=0.7.2",
 ]
 
 [project.optional-dependencies]
