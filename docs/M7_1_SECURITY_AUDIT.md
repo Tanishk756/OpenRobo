@@ -1,8 +1,8 @@
 ﻿# Milestone 7.1 Security Audit & Vulnerability Remediation Report
 
-**Date**: September 17, 2026  
-**Auditor**: OpenRobo Fleet Security Team  
-**Scope**: OpenRobo Fleet Foundation, PKI, Agent Transport, and Control Plane Ingress  
+**Date**: September 17, 2026
+**Auditor**: OpenRobo Fleet Security Team
+**Scope**: OpenRobo Fleet Foundation, PKI, Agent Transport, and Control Plane Ingress
 **Target Milestone**: Milestone 7.1.1 — Fleet Security Boundary Closure & Real mTLS Verification
 
 ---

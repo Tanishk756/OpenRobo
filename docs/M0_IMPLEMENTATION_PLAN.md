@@ -1,6 +1,6 @@
 # OpenRobo — Milestone 0 (M0) Implementation Plan (Revised)
 
-**Milestone**: M0 — Repository Foundation & Architecture Baseline  
+**Milestone**: M0 — Repository Foundation & Architecture Baseline
 **Goal**: Establish a production-grade polyglot monorepo structure, unified developer tooling, canonical JSON schemas, SQLAlchemy 2.x ORM & Alembic baseline, Knowledge Graph edge schema, Vitest/Playwright test harness, and Apache-2.0 licensing without creating fake UI or placeholder code.
 
 ---

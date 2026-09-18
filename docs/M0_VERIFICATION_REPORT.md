@@ -1,9 +1,9 @@
 # OpenRobo M0 Foundation — Execution & Verification Report
 
-**Milestone:** M0 (Repository & Architectural Foundation)  
-**Status:** VERIFIED & PASSED  
-**Date:** August 31, 2026  
-**License Baseline:** Apache-2.0  
+**Milestone:** M0 (Repository & Architectural Foundation)
+**Status:** VERIFIED & PASSED
+**Date:** August 31, 2026
+**License Baseline:** Apache-2.0
 
 ---
 
