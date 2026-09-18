@@ -1,5 +1,9 @@
 """Pydantic schemas for release catalog, artifact sources, deployments, approvals, and events."""
 
+import hashlib
+import json
+import os
+import urllib.parse
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -72,6 +76,30 @@ class ArtifactSourceCreate(BaseModel):
     max_artifact_bytes: int = Field(default=104857600, gt=0, le=1073741824)  # max 1 GB
     allow_private_network: bool = Field(default=False)
 
+    @field_validator("base_url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        parsed = urllib.parse.urlparse(v.strip())
+        if not parsed.scheme or not parsed.hostname:
+            raise ValueError("base_url must include scheme and hostname")
+        if parsed.username or parsed.password:
+            raise ValueError("base_url must not contain embedded user credentials")
+        if parsed.query or parsed.fragment:
+            raise ValueError("base_url must not contain query parameters or fragments")
+
+        is_dev = os.getenv("ENVIRONMENT") == "development"
+        allow_dev_http = os.getenv("OPENROBO_ALLOW_DEV_ARTIFACT_HTTP", "false").lower() in ("true", "1")
+
+        if parsed.scheme.lower() == "http":
+            if not (is_dev and allow_dev_http):
+                raise ValueError(
+                    "HTTP artifact sources are only permitted when ENVIRONMENT=development and OPENROBO_ALLOW_DEV_ARTIFACT_HTTP=true"
+                )
+        elif parsed.scheme.lower() != "https":
+            raise ValueError("Artifact source base_url must use HTTPS (or HTTP in dev mode with OPENROBO_ALLOW_DEV_ARTIFACT_HTTP=true)")
+
+        return v.strip().rstrip("/")
+
 
 class ArtifactSourceResponse(BaseModel):
     id: str
@@ -92,6 +120,15 @@ class DeploymentCreate(BaseModel):
     rollout_strategy: RolloutStrategy = Field(default_factory=RolloutStrategy)
     target_filter: TargetFilter = Field(default_factory=TargetFilter)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
+
+    def compute_request_digest(self) -> str:
+        data = {
+            "release_id": self.release_id,
+            "rollout_strategy": self.rollout_strategy.model_dump(),
+            "target_filter": self.target_filter.model_dump(),
+        }
+        canon = json.dumps(data, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
 class DeviceDeploymentResponse(BaseModel):

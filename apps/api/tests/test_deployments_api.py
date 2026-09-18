@@ -225,17 +225,39 @@ async def test_deployment_creation_snapshot_and_approval(async_client: AsyncClie
     assert dep_data["version"] == 1
     assert dep_data["release_snapshot"]["manifest_digest"] == VALID_DIGEST_1
 
-    # 4. Idempotent creation with same key returns existing
+    # 4. Idempotent creation with same key + same request returns existing
     dep_repeat = await async_client.post(
         "/api/v1/deployments",
         json={
             "release_id": "rel-v1.0.0",
+            "rollout_strategy": {
+                "strategy_type": "CANARY",
+                "stages": [
+                    {"stage_index": 0, "target_percentage": 50, "require_approval": True},
+                    {"stage_index": 1, "target_percentage": 100, "require_approval": True},
+                ],
+            },
+            "target_filter": {
+                "device_ids": ["bot-canary-01"],
+            },
             "idempotency_key": "idemp-test-01",
         },
         headers=ADMIN_HEADERS,
     )
     assert dep_repeat.status_code == 201
     assert dep_repeat.json()["id"] == dep_id
+
+    # Idempotent creation with same key + mutated request returns 409 IDEMPOTENCY_CONFLICT (Amendment 13)
+    dep_conflict = await async_client.post(
+        "/api/v1/deployments",
+        json={
+            "release_id": "rel-v1.0.0",
+            "rollout_strategy": {"strategy_type": "IMMEDIATE_ALL"},
+            "idempotency_key": "idemp-test-01",
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert dep_conflict.status_code == 409
 
     # 5. Release is now immutable
     rel_mut_resp = await async_client.post(

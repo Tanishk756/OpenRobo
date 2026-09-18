@@ -1,4 +1,4 @@
-"""SQLAlchemy models for release catalog, artifact distribution, deployments, outbox instructions, and audit events."""
+"""SQLAlchemy declarative models for authoritative deployment orchestration."""
 
 import uuid
 from datetime import datetime, timezone
@@ -15,7 +15,7 @@ def utc_now() -> datetime:
 
 
 class ReleaseArtifactModel(Base):
-    """Authoritative release catalog storing immutable release metadata."""
+    """Authoritative catalog release record with digest pinning and verification keys."""
 
     __tablename__ = "release_artifacts"
 
@@ -34,16 +34,16 @@ class ReleaseArtifactModel(Base):
     target_architecture: Mapped[str] = mapped_column(sa.String(32), default="x86_64", nullable=False)
     target_ros_distro: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)
 
-    status: Mapped[str] = mapped_column(sa.String(32), default="ACTIVE", nullable=False)
+    status: Mapped[str] = mapped_column(sa.String(32), default="ACTIVE", index=True, nullable=False)
     immutable_after_deployment: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
-    registered_by: Mapped[str] = mapped_column(sa.String(128), default="configured-admin", nullable=False)
 
+    registered_by: Mapped[str] = mapped_column(sa.String(128), default="configured-admin", nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
 class ArtifactSourceModel(Base):
-    """Configured trusted artifact distribution endpoints."""
+    """Authorized artifact distribution source configuration."""
 
     __tablename__ = "artifact_sources"
 
@@ -52,25 +52,24 @@ class ArtifactSourceModel(Base):
     enabled: Mapped[bool] = mapped_column(sa.Boolean, default=True, nullable=False)
     allowed_host: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     ca_policy: Mapped[Optional[str]] = mapped_column(sa.String(255), nullable=True)
-    max_artifact_bytes: Mapped[int] = mapped_column(sa.BigInteger, default=104857600, nullable=False)  # 100 MB
+    max_artifact_bytes: Mapped[int] = mapped_column(sa.BigInteger, default=104857600, nullable=False)
     allow_private_network: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
-
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
 
 
 class DeploymentModel(Base):
-    """Root deployment orchestration record with snapshot release evidence and rollout state."""
+    """Top-level deployment record snapshotting release metadata and orchestrating canary rollout."""
 
     __tablename__ = "deployments"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     release_id: Mapped[str] = mapped_column(sa.String(128), index=True, nullable=False)
-
-    # Immutable release snapshot persisted at deployment creation
     release_snapshot_json: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
     manifest_digest: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     artifact_digest: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     workspace_digest: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+
     release_key_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     artifact_source_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
 
@@ -88,6 +87,7 @@ class DeploymentModel(Base):
     generation: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
     version: Mapped[int] = mapped_column(sa.Integer, default=1, nullable=False)  # Optimistic concurrency
     idempotency_key: Mapped[Optional[str]] = mapped_column(sa.String(128), unique=True, index=True, nullable=True)
+    request_digest: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)
 
     created_by: Mapped[str] = mapped_column(sa.String(128), default="configured-admin", nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
@@ -138,6 +138,20 @@ class DeviceDeploymentModel(Base):
     __table_args__ = (sa.UniqueConstraint("deployment_id", "device_id", name="uq_deployment_device"),)
 
 
+class DeviceDeploymentLeaseModel(Base):
+    """Persistent device mutation lease ensuring only one active non-terminal deployment mutates a device."""
+
+    __tablename__ = "device_deployment_leases"
+
+    device_id: Mapped[str] = mapped_column(sa.String(64), sa.ForeignKey("fleet_devices.id", ondelete="CASCADE"), primary_key=True)
+    deployment_id: Mapped[str] = mapped_column(
+        sa.String(36), sa.ForeignKey("deployments.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    generation: Mapped[int] = mapped_column(sa.BigInteger, nullable=False)
+    acquired_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
 class DeploymentInstructionModel(Base):
     """Durable server-side outbox storing deployment instructions until confirmed delivery."""
 
@@ -159,6 +173,7 @@ class DeploymentInstructionModel(Base):
     last_attempt_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     next_attempt_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)

@@ -1,4 +1,4 @@
-"""Deployment orchestration, approval gates, and execution status endpoints."""
+"""Deployment orchestration endpoints with optimistic concurrency, canary gates, and audit logs."""
 
 import json
 import logging
@@ -73,7 +73,6 @@ async def create_deployment(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    # Create a new deployment orchestration record.
     try:
         deployment = await DeploymentService.create_deployment(
             session=db,
@@ -87,7 +86,10 @@ async def create_deployment(
         return _format_deployment_response(summary)
     except ValueError as e:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        err_msg = str(e)
+        if "IDEMPOTENCY_CONFLICT" in err_msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
     except Exception:
         await db.rollback()
         logger.exception("Failed to create deployment")
@@ -97,11 +99,11 @@ async def create_deployment(
 @router.get(
     "",
     response_model=List[DeploymentResponse],
+    dependencies=[Depends(verify_admin_authorization)],
 )
 async def list_deployments(
     db: AsyncSession = Depends(get_db),
 ):
-    # List all deployment records.
     stmt = select(DeploymentModel).order_by(DeploymentModel.created_at.desc())
     res = await db.execute(stmt)
     deployments = list(res.scalars().all())
@@ -117,12 +119,12 @@ async def list_deployments(
 @router.get(
     "/{deployment_id}",
     response_model=DeploymentResponse,
+    dependencies=[Depends(verify_admin_authorization)],
 )
 async def get_deployment(
     deployment_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    # Get details and stage summaries for a deployment.
     summary = await DeploymentService.get_deployment_summary(db, deployment_id)
     if not summary:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Deployment '{deployment_id}' not found")
@@ -140,7 +142,6 @@ async def approve_stage_progression(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    # Optimistic concurrency operator approval gate.
     try:
         deployment = await DeploymentService.approve_stage_progression(
             session=db,
@@ -155,7 +156,6 @@ async def approve_stage_progression(
         return _format_deployment_response(summary)
     except ValueError as e:
         await db.rollback()
-        # Distinguish optimistic concurrency conflict
         if "Optimistic conflict" in str(e) or "mismatch" in str(e):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -174,7 +174,6 @@ async def cancel_deployment(
     deployment_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    # Cancel an ongoing deployment.
     stmt = select(DeploymentModel).where(DeploymentModel.id == deployment_id).with_for_update()
     res = await db.execute(stmt)
     deployment = res.scalar_one_or_none()
@@ -185,24 +184,64 @@ async def cancel_deployment(
     if curr_state in (DeploymentState.COMPLETED, DeploymentState.CANCELLED):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Deployment is already {curr_state.value}")
 
-    deployment.status = DeploymentState.CANCELLED.value
+    gen = await DeploymentService.get_next_generation(db)
+    deployment.status = DeploymentState.CANCELLING.value
+    deployment.generation = gen
     deployment.version += 1
-    await DeploymentService.cancel_remaining_devices(db, deployment_id, deployment.generation)
+    await DeploymentService.cancel_remaining_devices(db, deployment_id, gen)
     await db.commit()
 
     summary = await DeploymentService.get_deployment_summary(db, deployment_id)
     return _format_deployment_response(summary)
 
 
+@router.post(
+    "/{deployment_id}/pause",
+    response_model=DeploymentResponse,
+    dependencies=[Depends(verify_admin_authorization)],
+)
+async def pause_deployment(
+    deployment_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await DeploymentService.pause_deployment(db, deployment_id)
+        await db.commit()
+        summary = await DeploymentService.get_deployment_summary(db, deployment_id)
+        return _format_deployment_response(summary)
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post(
+    "/{deployment_id}/resume",
+    response_model=DeploymentResponse,
+    dependencies=[Depends(verify_admin_authorization)],
+)
+async def resume_deployment(
+    deployment_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await DeploymentService.resume_deployment(db, deployment_id)
+        await db.commit()
+        summary = await DeploymentService.get_deployment_summary(db, deployment_id)
+        return _format_deployment_response(summary)
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get(
     "/{deployment_id}/devices",
     response_model=List[DeviceDeploymentResponse],
+    dependencies=[Depends(verify_admin_authorization)],
 )
 async def list_deployment_devices(
     deployment_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    # List device deployment statuses for a deployment.
     stmt = select(DeviceDeploymentModel).where(DeviceDeploymentModel.deployment_id == deployment_id)
     res = await db.execute(stmt)
     return list(res.scalars().all())
@@ -211,6 +250,7 @@ async def list_deployment_devices(
 @router.get(
     "/{deployment_id}/events",
     response_model=List[DeploymentEventResponse],
+    dependencies=[Depends(verify_admin_authorization)],
 )
 async def list_deployment_events(
     deployment_id: str,
@@ -218,7 +258,6 @@ async def list_deployment_events(
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    # List paginated audit events for a deployment.
     stmt = (
         select(DeploymentEventModel)
         .where(DeploymentEventModel.deployment_id == deployment_id)

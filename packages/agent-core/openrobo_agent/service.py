@@ -2,10 +2,22 @@
 
 import asyncio
 import logging
+import os
 import time
 from typing import Optional
 
+from openrobo_release.deployment_protocol import (
+    DeploymentAckEnvelope,
+    DeploymentInstructionEnvelope,
+    DeploymentStatusReport,
+)
+from openrobo_release.trust_store import TrustedReleaseKeyStore
+
 from openrobo_agent.config import AgentConfig
+from openrobo_agent.deployment.artifact_client import ArtifactClient
+from openrobo_agent.deployment.slots import ABSlotManager
+from openrobo_agent.deployment.source_registry import TrustedArtifactSourceRegistry
+from openrobo_agent.deployment.worker import DeploymentWorker
 from openrobo_agent.heartbeat import HeartbeatSampler
 from openrobo_agent.identity import DeviceIdentityManager
 from openrobo_agent.models import MessageEnvelope
@@ -55,14 +67,18 @@ WantedBy=multi-user.target
 
 
 class AgentDaemon:
-    """Main agent daemon coordinating heartbeat, telemetry sampling, spooling, and transport."""
+    """Main agent daemon coordinating heartbeat, telemetry sampling, spooling, transport, and deployment execution."""
 
-    def __init__(self, config: AgentConfig):
+    def __init__(self, config: AgentConfig, current_ros_distro: Optional[str] = None):
         self.config = config
         self.identity_manager = DeviceIdentityManager(config)
         self.sampler = HeartbeatSampler(self.identity_manager)
         self.collector = TelemetryCollector(self.identity_manager)
-        self.spool = OfflineTelemetrySpool(config.spool_path, max_events=config.spool_max_events, max_bytes=config.spool_max_bytes)
+        self.spool = OfflineTelemetrySpool(
+            config.spool_path,
+            max_events=config.spool_max_events,
+            max_bytes=config.spool_max_bytes,
+        )
 
         self.transport = HttpTransportClient(
             base_url=config.control_plane_url,
@@ -70,7 +86,51 @@ class AgentDaemon:
             key_path=str(config.key_path) if config.key_path.exists() else None,
             ca_cert_path=str(config.ca_cert_path) if config.ca_cert_path.exists() else None,
         )
+
+        # M7.2 Deployment Subsystem Wiring
+        allow_dev_http = os.getenv("ENVIRONMENT") == "development" and os.getenv("OPENROBO_ALLOW_DEV_ARTIFACT_HTTP", "false").lower() in (
+            "true",
+            "1",
+        )
+        self.slot_manager = ABSlotManager(deployment_root=self.config.state_dir / "slots")
+        self.key_store = TrustedReleaseKeyStore(trust_dir=self.config.state_dir / "trusted_keys")
+        self.source_registry = TrustedArtifactSourceRegistry(self.config.state_dir / "artifact_sources.json")
+        self.artifact_client = ArtifactClient(
+            downloads_dir=self.config.state_dir / "downloads",
+            allow_http_dev=allow_dev_http,
+        )
+        resolved_distro = current_ros_distro or os.environ.get("ROS_DISTRO")
+        if not resolved_distro:
+            try:
+                resolved_distro = HeartbeatSampler(self.identity_manager).sample_capabilities().distro
+            except Exception:
+                resolved_distro = None
+
+        self.worker = DeploymentWorker(
+            device_id=self.identity_manager.device_id,
+            state_dir=self.config.state_dir,
+            slot_manager=self.slot_manager,
+            key_store=self.key_store,
+            artifact_client=self.artifact_client,
+            source_registry=self.source_registry,
+            current_ros_distro=resolved_distro,
+            status_callback=self._handle_worker_status,
+        )
+
+        # Startup crash reconciliation
+        self.worker.reconcile_on_startup()
+
         self._running = False
+        self._status_queue: asyncio.Queue[DeploymentStatusReport] = asyncio.Queue()
+
+    async def _handle_worker_status(self, report: DeploymentStatusReport) -> None:
+        """Callback invoked when worker emits state transitions."""
+        logger.info("Worker status update for %s: %s (gen: %d)", report.deployment_id, report.state.value, report.generation)
+        await self._status_queue.put(report)
+
+    async def handle_deployment_instruction(self, envelope: DeploymentInstructionEnvelope) -> DeploymentAckEnvelope:
+        """Process incoming deployment instruction via local worker."""
+        return await self.worker.handle_instruction(envelope)
 
     def step_heartbeat(self) -> MessageEnvelope:
         """Sample heartbeat and envelope it."""
