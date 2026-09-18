@@ -1,4 +1,4 @@
-﻿"""X.509 Certificate, CSR, and Development CA Utilities using cryptography."""
+"""X.509 Certificate, CSR, and Development CA Utilities using cryptography."""
 
 import abc
 import hashlib
@@ -65,17 +65,15 @@ def create_device_csr(
     display_name: str = "robot-node",
 ) -> str:
     """Create a PEM-encoded X.509 Certificate Signing Request (CSR) for a device."""
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, f"openrobo-device:{device_id}"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Fleet"),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, display_name),
-    ])
-
-    csr = (
-        x509.CertificateSigningRequestBuilder()
-        .subject_name(subject)
-        .sign(private_key, None)
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, f"openrobo-device:{device_id}"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Fleet"),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, display_name),
+        ]
     )
+
+    csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(private_key, None)
 
     return csr.public_bytes(serialization.Encoding.PEM).decode("utf-8")
 
@@ -217,10 +215,12 @@ class DevelopmentCA(CertificateAuthority):
 
     def _generate_and_persist(self, key_file: Path, cert_file: Path) -> None:
         self.ca_key, public_key = generate_keypair()
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, "OpenRobo Development Root CA"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Dev PKI"),
-        ])
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COMMON_NAME, "OpenRobo Development Root CA"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Dev PKI"),
+            ]
+        )
         now = datetime.now(timezone.utc)
         self.ca_cert = (
             x509.CertificateBuilder()
@@ -246,10 +246,12 @@ class DevelopmentCA(CertificateAuthority):
 
     def _generate_ephemeral(self) -> None:
         self.ca_key, public_key = generate_keypair()
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, "OpenRobo Development Root CA"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Dev PKI"),
-        ])
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COMMON_NAME, "OpenRobo Development Root CA"),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Dev PKI"),
+            ]
+        )
         now = datetime.now(timezone.utc)
         self.ca_cert = (
             x509.CertificateBuilder()

@@ -1,4 +1,4 @@
-﻿"""VS Code Dev Container generator."""
+"""VS Code Dev Container generator."""
 
 import json
 

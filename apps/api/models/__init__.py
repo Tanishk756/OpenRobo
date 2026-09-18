@@ -1,5 +1,15 @@
 from apps.api.database import Base
 
+from .deployment import (
+    ArtifactSourceModel,
+    DeploymentApprovalModel,
+    DeploymentCounterModel,
+    DeploymentEventModel,
+    DeploymentInstructionModel,
+    DeploymentModel,
+    DeviceDeploymentModel,
+    ReleaseArtifactModel,
+)
 from .fleet import (
     AgentEnrollmentTokenModel,
     AgentHeartbeatModel,
@@ -30,4 +40,12 @@ __all__ = [
     "AgentEnrollmentTokenModel",
     "AgentHeartbeatModel",
     "AgentTelemetryEventModel",
+    "ReleaseArtifactModel",
+    "ArtifactSourceModel",
+    "DeploymentModel",
+    "DeviceDeploymentModel",
+    "DeploymentInstructionModel",
+    "DeploymentApprovalModel",
+    "DeploymentEventModel",
+    "DeploymentCounterModel",
 ]

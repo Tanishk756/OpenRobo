@@ -1,4 +1,4 @@
-﻿"""Verification engine for cryptographic release manifests, signatures, and target compatibility."""
+"""Verification engine for cryptographic release manifests, signatures, and target compatibility."""
 
 import base64
 import hashlib

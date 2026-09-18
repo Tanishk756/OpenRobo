@@ -13,9 +13,28 @@ from openrobo_release.models import ReleaseManifest
 
 # Windows reserved device names
 WINDOWS_RESERVED_NAMES = {
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
 }
 
 
@@ -94,8 +113,8 @@ class SafeArtifactExtractor:
         max_archive_bytes: int = 100 * 1024 * 1024,  # 100 MB compressed
         max_expansion_ratio: float = 50.0,
         max_files: int = 10000,
-        max_total_bytes: int = 200 * 1024 * 1024,   # 200 MB extracted
-        max_file_size: int = 50 * 1024 * 1024,      # 50 MB single file
+        max_total_bytes: int = 200 * 1024 * 1024,  # 200 MB extracted
+        max_file_size: int = 50 * 1024 * 1024,  # 50 MB single file
         max_path_length: int = 255,
     ) -> None:
         self.allow_symlinks = allow_symlinks

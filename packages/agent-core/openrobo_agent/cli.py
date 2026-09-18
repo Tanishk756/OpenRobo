@@ -192,6 +192,7 @@ def run_agent(
 # Deployment Subcommands
 # ==========================================
 
+
 @deployment_app.command("slots")
 def list_slots(
     state_dir: Optional[str] = typer.Option(None, "--state-dir", "-s", help="Custom agent state directory"),

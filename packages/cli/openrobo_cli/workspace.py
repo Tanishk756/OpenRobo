@@ -1,4 +1,4 @@
-﻿"""Workspace generation CLI commands for OpenRobo."""
+"""Workspace generation CLI commands for OpenRobo."""
 
 import hashlib
 import json
@@ -59,9 +59,7 @@ def render_file_tree_rich(tree_dict: dict, branch: Tree):
 @workspace_app.command("preview")
 def preview(
     manifest_file: Path = typer.Argument(..., help="Path to OpenRobo stack manifest JSON"),
-    allow_incompatible: bool = typer.Option(
-        False, "--allow-incompatible", help="Allow preview even if stack is marked INCOMPATIBLE"
-    ),
+    allow_incompatible: bool = typer.Option(False, "--allow-incompatible", help="Allow preview even if stack is marked INCOMPATIBLE"),
 ):
     """
     Preview synthesized ROS 2 workspace file tree and component resolution.
@@ -158,12 +156,8 @@ def preview(
 @workspace_app.command("generate")
 def generate(
     manifest_file: Path = typer.Argument(..., help="Path to OpenRobo stack manifest JSON"),
-    output: Path = typer.Option(
-        Path("./generated_workspace"), "--output", "-o", help="Target output directory"
-    ),
-    allow_incompatible: bool = typer.Option(
-        False, "--allow-incompatible", help="Allow generation even if stack is marked INCOMPATIBLE"
-    ),
+    output: Path = typer.Option(Path("./generated_workspace"), "--output", "-o", help="Target output directory"),
+    allow_incompatible: bool = typer.Option(False, "--allow-incompatible", help="Allow generation even if stack is marked INCOMPATIBLE"),
 ):
     """
     Generate colcon workspace files and container definitions to target directory.
@@ -201,9 +195,7 @@ def generate(
 @workspace_app.command("archive")
 def archive(
     manifest_file: Path = typer.Argument(..., help="Path to OpenRobo stack manifest JSON"),
-    output: Path = typer.Option(
-        Path("./workspace.zip"), "--output", "-o", help="Target ZIP archive path"
-    ),
+    output: Path = typer.Option(Path("./workspace.zip"), "--output", "-o", help="Target ZIP archive path"),
     allow_incompatible: bool = typer.Option(
         False, "--allow-incompatible", help="Allow archive generation even if stack is marked INCOMPATIBLE"
     ),

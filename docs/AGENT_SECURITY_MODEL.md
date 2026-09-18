@@ -1,4 +1,4 @@
-﻿# OpenRobo Agent & Fleet Security Model (Milestone 7.1.1)
+# OpenRobo Agent & Fleet Security Model (Milestone 7.1.1)
 
 **Document:** Agent & Fleet Security Model
 **Version:** 1.1.0 (Milestone 7.1.1 Closure)

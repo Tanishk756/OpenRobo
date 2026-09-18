@@ -1,4 +1,4 @@
-﻿import os
+import os
 from unittest.mock import patch
 
 from openrobo_runtime.models import RosEnvironmentStatus

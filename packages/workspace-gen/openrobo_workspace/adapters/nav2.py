@@ -1,4 +1,4 @@
-﻿"""Nav2 Adapter for OpenRobo Workspace Generator (Hardened).
+"""Nav2 Adapter for OpenRobo Workspace Generator (Hardened).
 
 Separates safe framework defaults from robot-specific assumptions.
 Supports explicit frame/topic configurations and uses safe YAML dumping.

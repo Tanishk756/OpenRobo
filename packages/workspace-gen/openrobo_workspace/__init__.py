@@ -1,4 +1,4 @@
-﻿"""OpenRobo Workspace & Deployment Generator.
+"""OpenRobo Workspace & Deployment Generator.
 
 Milestone 5.1 Hardened package for synthesizing deterministic, reproducible colcon workspaces,
 Dockerfiles, Dev Containers, and deployment archives from validated Stack Manifests.

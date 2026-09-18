@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """OpenRobo Milestone 6.2 - Live Runtime Acceptance & Release Readiness Verification Suite."""
 
 import hashlib
@@ -187,9 +187,7 @@ def main():
         print("\n[PHASE 4] Evaluating Valid Runtime Contract against Live Graph...")
         valid_contract = RuntimeContract(
             expected_nodes=["talker", "listener"],
-            expected_topics=[
-                ExpectedTopicContract(name="/chatter", msg_type="std_msgs/msg/String", required=True)
-            ],
+            expected_topics=[ExpectedTopicContract(name="/chatter", msg_type="std_msgs/msg/String", required=True)],
             expected_transforms=[],
             expected_services=[],
         )
@@ -234,9 +232,7 @@ def main():
 
         mismatch_contract = RuntimeContract(
             expected_nodes=["talker"],
-            expected_topics=[
-                ExpectedTopicContract(name="/chatter", msg_type="sensor_msgs/msg/LaserScan", required=True)
-            ],
+            expected_topics=[ExpectedTopicContract(name="/chatter", msg_type="sensor_msgs/msg/LaserScan", required=True)],
         )
         fail_result_2 = comparator.compare(
             planned_manifest={},
@@ -457,7 +453,7 @@ ament_package()
     docker_avail = False
     if docker_bin:
         code, out, _ = run_cmd([docker_bin, "version", "--format", "{{.Server.Version}}"])
-        docker_avail = (code == 0 and bool(out.strip()))
+        docker_avail = code == 0 and bool(out.strip())
     print(f"  Docker Daemon Available: {docker_avail}")
 
     evidence["phases"]["phase_10_docker"] = {

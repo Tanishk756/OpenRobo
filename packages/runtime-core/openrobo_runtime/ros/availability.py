@@ -1,4 +1,4 @@
-﻿"""ROS Environment Detector and Capability Discovery."""
+"""ROS Environment Detector and Capability Discovery."""
 
 import os
 import shutil
@@ -26,6 +26,7 @@ class RosEnvironmentDetector:
         rclpy_available = False
         try:
             import rclpy  # noqa: F401
+
             rclpy_available = True
         except (ImportError, Exception):
             rclpy_available = False

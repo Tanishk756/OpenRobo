@@ -64,8 +64,7 @@ def generate_docker_compose(plan: WorkspaceGenerationPlan) -> GeneratedFile:
     content = (
         "# ====================================================================\n"
         "# OpenRobo Docker Compose Multi-Service Deployment (Least Privilege)\n"
-        "# ====================================================================\n\n"
-        + yaml.safe_dump(compose_dict, sort_keys=False)
+        "# ====================================================================\n\n" + yaml.safe_dump(compose_dict, sort_keys=False)
     )
 
     return GeneratedFile(

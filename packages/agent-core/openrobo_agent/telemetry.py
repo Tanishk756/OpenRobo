@@ -34,46 +34,56 @@ class TelemetryCollector:
         removed_nodes = self._known_nodes - current_nodes
 
         for n in added_nodes:
-            events.append(self.create_event(
-                TelemetryEventType.NODE_STATE_CHANGE,
-                {"action": "NODE_ADDED", "node_name": n},
-            ))
+            events.append(
+                self.create_event(
+                    TelemetryEventType.NODE_STATE_CHANGE,
+                    {"action": "NODE_ADDED", "node_name": n},
+                )
+            )
 
         for n in removed_nodes:
-            events.append(self.create_event(
-                TelemetryEventType.NODE_STATE_CHANGE,
-                {"action": "NODE_REMOVED", "node_name": n},
-            ))
+            events.append(
+                self.create_event(
+                    TelemetryEventType.NODE_STATE_CHANGE,
+                    {"action": "NODE_REMOVED", "node_name": n},
+                )
+            )
 
         # Check for added / removed topics
         added_topics = current_topics - self._known_topics
         removed_topics = self._known_topics - current_topics
 
         for t in added_topics:
-            events.append(self.create_event(
-                TelemetryEventType.TOPIC_STATE_CHANGE,
-                {"action": "TOPIC_ADDED", "topic_name": t},
-            ))
+            events.append(
+                self.create_event(
+                    TelemetryEventType.TOPIC_STATE_CHANGE,
+                    {"action": "TOPIC_ADDED", "topic_name": t},
+                )
+            )
 
         for t in removed_topics:
-            events.append(self.create_event(
-                TelemetryEventType.TOPIC_STATE_CHANGE,
-                {"action": "TOPIC_REMOVED", "topic_name": t},
-            ))
+            events.append(
+                self.create_event(
+                    TelemetryEventType.TOPIC_STATE_CHANGE,
+                    {"action": "TOPIC_REMOVED", "topic_name": t},
+                )
+            )
 
         self._known_nodes = current_nodes
         self._known_topics = current_topics
 
         # Periodic full summary
         if now - self._last_full_snapshot_time > full_snapshot_interval_sec:
-            events.append(self.create_event(
-                TelemetryEventType.DIAGNOSTIC_EVENT,
-                {
-                    "node_count": len(current_nodes),
-                    "topic_count": len(current_topics),
-                    "collector_status": graph.get("status"),
-                },
-            ))
+            events.append(
+                self.create_event(
+                    TelemetryEventType.DIAGNOSTIC_EVENT,
+                    {
+                        "node_count": len(current_nodes),
+                        "topic_count": len(current_topics),
+                        "collector_status": graph.get("status"),
+                    },
+                )
+            )
             self._last_full_snapshot_time = now
 
         return events

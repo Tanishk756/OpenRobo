@@ -45,6 +45,4 @@ def test_secret_exclusion_blocks_release(clean_workspace, tmp_path):
     (clean_workspace / "id_rsa").write_text("SECRET RSA KEY", encoding="utf-8")
 
     with pytest.raises(ValueError, match="High-confidence secret file detected"):
-        create_deterministic_archive(
-            clean_workspace, out, target, release_id="rel-1", release_version="1.0.0", release_key_id="k1"
-        )
+        create_deterministic_archive(clean_workspace, out, target, release_id="rel-1", release_version="1.0.0", release_key_id="k1")

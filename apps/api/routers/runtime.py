@@ -1,4 +1,4 @@
-﻿"""Runtime Verification, Introspection & Simulation API Router (Milestone 6.1)."""
+"""Runtime Verification, Introspection & Simulation API Router (Milestone 6.1)."""
 
 import asyncio
 import json

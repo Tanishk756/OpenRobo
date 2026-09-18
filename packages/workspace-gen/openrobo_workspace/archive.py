@@ -1,4 +1,4 @@
-﻿"""Deterministic in-memory ZIP archive builder."""
+"""Deterministic in-memory ZIP archive builder."""
 
 import io
 import zipfile

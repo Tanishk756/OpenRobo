@@ -233,3 +233,13 @@
 | **REQ-M7-43** | Strict Rollback File Set & Link Rejection | `VERIFIED` | Rollback payload inspection walks entire slot directory, rejecting unexpected regular files, unlisted files, symlinks, or special devices | `test_slots.py` | `openrobo_agent/deployment/rollback.py` | None | Rollback security |
 | **REQ-M7-44** | Deployment Metadata & Journal Safe Failure | `VERIFIED` | Corrupted `slots.json` or `activation.intent.json` raises `RuntimeError` requiring manual/recovery action rather than silently resetting state | `test_slots.py` | `openrobo_agent/deployment/slots.py` | None | A/B state safety |
 | **REQ-M7-45** | Exact GitHub PR Provenance Alignment | `VERIFIED` | Verified and recorded PR #9 (`b983e85` -> `1c30a13`) and PR #10 (`6d58db9` -> `edb30a5`) exact SHAs and merge commits | Documentation | `docs/IMPLEMENTATION_LEDGER.md`, `docs/M7_2_1_HARDENING_REPORT.md` | None | Repository provenance |
+
+### Milestone 7.2.2 — Authenticated Remote Deployment Orchestration, Trusted Artifact Distribution & Operator-Gated Canary Rollout
+- **Status**: COMPLETE & VERIFIED
+- **Artifacts**:
+  - `0007_deployment_orchestration.py` Alembic migration (8 tables)
+  - `ReleaseArtifactModel`, `ArtifactSourceModel`, `DeploymentModel`, `DeviceDeploymentModel`, `DeploymentInstructionModel`, `DeploymentApprovalModel`, `DeploymentEventModel`, `DeploymentCounterModel`
+  - SSRF-hardened `ArtifactClient` with `.part` quarantine streaming
+  - Replay-safe, crash-consistent `DeploymentWorker` with monotonic generation state
+  - Strict direction-enforced WebSocket delivery protocol
+  - 222 Python tests, 19 frontend tests green

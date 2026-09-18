@@ -1,4 +1,4 @@
-﻿"""OpenRobo Agent Transport Abstraction & mTLS Client."""
+"""OpenRobo Agent Transport Abstraction & mTLS Client."""
 
 import abc
 import json
@@ -46,7 +46,7 @@ class TransportClient(abc.ABC):
 
 def calculate_backoff_delay(attempt: int, base_delay: float = 1.0, max_delay: float = 60.0, jitter_factor: float = 0.2) -> float:
     """Compute exponential backoff delay with jitter to prevent reconnect storms."""
-    delay = min(max_delay, base_delay * (2 ** attempt))
+    delay = min(max_delay, base_delay * (2**attempt))
     jitter = delay * jitter_factor * (random.random() * 2 - 1)
     return max(0.1, delay + jitter)
 
@@ -95,13 +95,10 @@ class HttpTransportClient(TransportClient):
         if env_mode == "production" and not allow_insecure:
             if not (self.cert_path and self.key_path and self.ca_cert_path):
                 raise RuntimeError(
-                    "CRITICAL SECURITY: Production mTLS agent requires cert_path, key_path, and ca_cert_path "
-                    "to be configured and present."
+                    "CRITICAL SECURITY: Production mTLS agent requires cert_path, key_path, and ca_cert_path to be configured and present."
                 )
             if not (os.path.exists(self.cert_path) and os.path.exists(self.key_path) and os.path.exists(self.ca_cert_path)):
-                raise RuntimeError(
-                    "CRITICAL SECURITY: Configured client certificate, key, or CA certificate file does not exist on disk."
-                )
+                raise RuntimeError("CRITICAL SECURITY: Configured client certificate, key, or CA certificate file does not exist on disk.")
 
         # Build genuine mTLS SSLContext
         ssl_ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)

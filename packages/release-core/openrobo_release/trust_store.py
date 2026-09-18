@@ -1,4 +1,4 @@
-﻿"""Agent-side trusted release key store for signature verification."""
+"""Agent-side trusted release key store for signature verification."""
 
 import json
 import os

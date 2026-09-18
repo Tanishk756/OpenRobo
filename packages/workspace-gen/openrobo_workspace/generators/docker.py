@@ -1,4 +1,4 @@
-﻿"""Multi-stage reproducible Dockerfile generator."""
+"""Multi-stage reproducible Dockerfile generator."""
 
 from openrobo_workspace.models import GeneratedFile, WorkspaceGenerationPlan
 

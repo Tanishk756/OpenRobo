@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -166,13 +166,16 @@ async def test_expired_token_rejection(async_client):
     dev_id = "66666666-6666-6666-6666-666666666666"
     _, csr = generate_agent_key_and_csr(dev_id, "expired-test-bot")
 
-    enroll_res = await async_client.post("/api/v1/fleet/enroll", json={
-        "enrollment_token": raw_token,
-        "device_id": dev_id,
-        "device_name": "expired-test-bot",
-        "csr_pem": csr,
-        "capabilities": [],
-    })
+    enroll_res = await async_client.post(
+        "/api/v1/fleet/enroll",
+        json={
+            "enrollment_token": raw_token,
+            "device_id": dev_id,
+            "device_name": "expired-test-bot",
+            "csr_pem": csr,
+            "capabilities": [],
+        },
+    )
     assert enroll_res.status_code == 401
     assert "expired" in enroll_res.json()["detail"].lower()
 
@@ -197,12 +200,15 @@ async def test_csr_device_identity_mismatch_rejection(async_client):
     priv, _ = generate_keypair()
     csr = create_device_csr(priv, "device-AAA")
 
-    enroll_res = await async_client.post("/api/v1/fleet/enroll", json={
-        "enrollment_token": token,
-        "device_id": "device-BBB",
-        "csr_pem": csr,
-        "capabilities": [],
-    })
+    enroll_res = await async_client.post(
+        "/api/v1/fleet/enroll",
+        json={
+            "enrollment_token": token,
+            "device_id": "device-BBB",
+            "csr_pem": csr,
+            "capabilities": [],
+        },
+    )
     assert enroll_res.status_code == 400
     assert "CSR validation failed" in enroll_res.json()["detail"]
 
@@ -214,14 +220,18 @@ async def test_header_spoofing_rejected_without_dev_gate(async_client, monkeypat
     monkeypatch.setenv("OPENROBO_ALLOW_DEV_CERT_HEADER", "false")
 
     headers = {"X-OpenRobo-Cert-Fingerprint": "aabbccdd" * 8}
-    res = await async_client.post("/api/v1/fleet/agent/heartbeat", json={
-        "protocol_version": "1.0",
-        "message_id": "spoof-msg-1",
-        "device_id": "some-device",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "message_type": "HEARTBEAT",
-        "payload": {},
-    }, headers=headers)
+    res = await async_client.post(
+        "/api/v1/fleet/agent/heartbeat",
+        json={
+            "protocol_version": "1.0",
+            "message_id": "spoof-msg-1",
+            "device_id": "some-device",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "message_type": "HEARTBEAT",
+            "payload": {},
+        },
+        headers=headers,
+    )
     assert res.status_code == 401
     assert "No verified client certificate identity presented" in res.json()["detail"]
 
@@ -262,13 +272,16 @@ async def test_replay_protection_and_clock_skew(async_client):
     token = token_res.json()["token"]
     dev_id = "33333333-3333-3333-3333-333333333333"
     _, csr = generate_agent_key_and_csr(dev_id, "replay-bot")
-    enroll_res = await async_client.post("/api/v1/fleet/enroll", json={
-        "enrollment_token": token,
-        "device_id": dev_id,
-        "device_name": "replay-bot",
-        "csr_pem": csr,
-        "capabilities": [],
-    })
+    enroll_res = await async_client.post(
+        "/api/v1/fleet/enroll",
+        json={
+            "enrollment_token": token,
+            "device_id": dev_id,
+            "device_name": "replay-bot",
+            "csr_pem": csr,
+            "capabilities": [],
+        },
+    )
     fp = enroll_res.json()["certificate_fingerprint"]
     headers = {"X-OpenRobo-Cert-Fingerprint": fp}
 
@@ -355,14 +368,18 @@ async def test_device_revocation_enforcement(async_client):
 
     now = datetime.now(timezone.utc)
     # Valid heartbeat before revocation
-    res = await async_client.post("/api/v1/fleet/agent/heartbeat", json={
-        "protocol_version": "1.0",
-        "message_id": "hb-before-revoke",
-        "device_id": dev_id,
-        "timestamp": now.isoformat(),
-        "message_type": "HEARTBEAT",
-        "payload": {"status": "ACTIVE"},
-    }, headers=headers)
+    res = await async_client.post(
+        "/api/v1/fleet/agent/heartbeat",
+        json={
+            "protocol_version": "1.0",
+            "message_id": "hb-before-revoke",
+            "device_id": dev_id,
+            "timestamp": now.isoformat(),
+            "message_type": "HEARTBEAT",
+            "payload": {"status": "ACTIVE"},
+        },
+        headers=headers,
+    )
     assert res.status_code == 200
 
     # Admin revokes device
@@ -375,13 +392,17 @@ async def test_device_revocation_enforcement(async_client):
     assert revoke_res.json()["status"] == "REVOKED"
 
     # Subsequent heartbeat must be rejected -> 403 Forbidden
-    res_after = await async_client.post("/api/v1/fleet/agent/heartbeat", json={
-        "protocol_version": "1.0",
-        "message_id": "hb-after-revoke",
-        "device_id": dev_id,
-        "timestamp": (now + timedelta(seconds=1)).isoformat(),
-        "message_type": "HEARTBEAT",
-        "payload": {"status": "ACTIVE"},
-    }, headers=headers)
+    res_after = await async_client.post(
+        "/api/v1/fleet/agent/heartbeat",
+        json={
+            "protocol_version": "1.0",
+            "message_id": "hb-after-revoke",
+            "device_id": dev_id,
+            "timestamp": (now + timedelta(seconds=1)).isoformat(),
+            "message_type": "HEARTBEAT",
+            "payload": {"status": "ACTIVE"},
+        },
+        headers=headers,
+    )
     assert res_after.status_code == 403
     assert "REVOKED" in res_after.json()["detail"]

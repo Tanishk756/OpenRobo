@@ -1,4 +1,4 @@
-﻿"""
+"""
 OpenRobo Milestone 7.1.1 - 100-Agent Local Control-Plane Application Simulation
 Measures:
 - 100 concurrent agent key generation and enrollment token consumption
@@ -83,14 +83,16 @@ async def run_simulation(agent_count: int = 100, heartbeat_cycles: int = 3):
             dev_id = str(uuid.uuid4())
             name = f"sim-robot-{i:03d}"
             key_pem, csr_pem = generate_agent_key_and_csr(dev_id, name)
-            agents.append({
-                "index": i,
-                "name": name,
-                "device_id": dev_id,
-                "token": token,
-                "key_pem": key_pem,
-                "csr_pem": csr_pem,
-            })
+            agents.append(
+                {
+                    "index": i,
+                    "name": name,
+                    "device_id": dev_id,
+                    "token": token,
+                    "key_pem": key_pem,
+                    "csr_pem": csr_pem,
+                }
+            )
 
     print(f" -> Successfully generated credentials and issued tokens for {len(agents)} agents.")
 

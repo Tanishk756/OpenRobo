@@ -1,4 +1,4 @@
-﻿"""Comprehensive unit tests for OpenRobo Workspace Generator (Milestone 5.1 Hardened)."""
+"""Comprehensive unit tests for OpenRobo Workspace Generator (Milestone 5.1 Hardened)."""
 
 import ast
 import hashlib
@@ -169,6 +169,7 @@ def test_conditional_stack_warnings(standard_stack_manifest):
 # M5.1 HARDENING TESTS: Adapter Matching, Safety, and Evidence Verification
 # ==============================================================================
 
+
 def test_adapter_exact_matching_and_false_positive_rejection():
     """Negative tests: Substring matches MUST NOT trigger verified adapters."""
     false_positives = [
@@ -280,9 +281,7 @@ def test_package_xml_xml_escaping_and_maintainer():
         "id": "special_stack",
         "name": "Special & Cool <Robot> Stack",
         "description": "Stack with <dangerous> & 'tricky' \"characters\"",
-        "metadata": {
-            "maintainer": {"name": "Tanishk & Co <dev>", "email": "dev@example.org"}
-        },
+        "metadata": {"maintainer": {"name": "Tanishk & Co <dev>", "email": "dev@example.org"}},
         "resources": [{"id": "nav2"}],
     }
     gen = WorkspaceGenerator(manifest)
@@ -322,9 +321,7 @@ def test_docker_explicit_device_passthrough():
         "id": "hw_stack",
         "name": "Hardware Stack",
         "resources": [{"id": "nav2"}],
-        "deployment": {
-            "devices": ["/dev/ttyUSB0", "/dev/i2c-1"]
-        },
+        "deployment": {"devices": ["/dev/ttyUSB0", "/dev/i2c-1"]},
     }
     gen = WorkspaceGenerator(manifest)
     _, files = gen.generate_files()

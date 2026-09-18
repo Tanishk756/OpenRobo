@@ -36,9 +36,7 @@ async def test_validate_adhoc_stack(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_resolve_adhoc_stack(client: AsyncClient):
     payload = {
-        "components": [
-            {"resource_id": "ros-navigation/nav2", "version": "1.3.0", "category": "navigation"}
-        ],
+        "components": [{"resource_id": "ros-navigation/nav2", "version": "1.3.0", "category": "navigation"}],
         "target_os": "ubuntu_24_04",
         "target_arch": "x86_64",
         "target_ros_distro": "jazzy",
@@ -62,9 +60,7 @@ async def test_stack_crud_workflow(client: AsyncClient):
         "target_os": "ubuntu_24_04",
         "target_arch": "x86_64",
         "target_ros_distro": "jazzy",
-        "components": [
-            {"resource_id": "ros-navigation/nav2", "version": "1.3.0", "category": "navigation", "optional": False}
-        ],
+        "components": [{"resource_id": "ros-navigation/nav2", "version": "1.3.0", "category": "navigation", "optional": False}],
         "metadata": {"author": "Tester"},
     }
     resp = await client.post("/api/v1/stacks", json=create_payload)
@@ -134,9 +130,7 @@ async def test_import_stack_manifest(client: AsyncClient):
         "version": "1.0.0",
         "robot": {"domain": "mobile_robotics", "type": "amr"},
         "target_platform": {"os": "ubuntu_24_04", "arch": "x86_64", "ros_distribution": "jazzy"},
-        "components": [
-            {"resource_id": "ros-navigation/nav2", "version": "1.3.0", "category": "navigation"}
-        ],
+        "components": [{"resource_id": "ros-navigation/nav2", "version": "1.3.0", "category": "navigation"}],
     }
     resp = await client.post("/api/v1/stacks/import", json={"manifest": valid_manifest})
     assert resp.status_code == 200

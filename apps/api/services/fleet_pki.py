@@ -1,4 +1,4 @@
-﻿import os
+import os
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
@@ -36,9 +36,7 @@ class FleetPKIService:
         if self._ca is not None:
             return self._ca
         if not self.is_dev_ca_enabled:
-            raise PermissionError(
-                "Development CA is disabled. Set OPENROBO_DEV_CA=true or configure production mTLS PKI."
-            )
+            raise PermissionError("Development CA is disabled. Set OPENROBO_DEV_CA=true or configure production mTLS PKI.")
         self._ca = DevelopmentCA(ca_dir=self.dev_ca_dir)
         return self._ca
 

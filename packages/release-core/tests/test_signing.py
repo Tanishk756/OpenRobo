@@ -173,25 +173,19 @@ def test_target_compatibility_arch_normalization(sample_manifest):
     verifier = ReleaseVerifier()
 
     # x86_64 vs amd64
-    man_amd64 = sample_manifest.model_copy(
-        update={"target": ReleaseTarget(operating_system="linux", architecture="amd64")}
-    )
+    man_amd64 = sample_manifest.model_copy(update={"target": ReleaseTarget(operating_system="linux", architecture="amd64")})
     res = verifier.verify_target_compatibility(man_amd64, current_os="Linux", current_arch="x86_64")
     assert res.is_valid is True
 
     # aarch64 vs arm64
-    man_arm64 = sample_manifest.model_copy(
-        update={"target": ReleaseTarget(operating_system="linux", architecture="arm64")}
-    )
+    man_arm64 = sample_manifest.model_copy(update={"target": ReleaseTarget(operating_system="linux", architecture="arm64")})
     res = verifier.verify_target_compatibility(man_arm64, current_os="Linux", current_arch="aarch64")
     assert res.is_valid is True
 
 
 def test_target_compatibility_ros_distro_unknown_fails_closed(sample_manifest):
     verifier = ReleaseVerifier()
-    man_ros = sample_manifest.model_copy(
-        update={"target": ReleaseTarget(operating_system="any", architecture="any", ros_distro="humble")}
-    )
+    man_ros = sample_manifest.model_copy(update={"target": ReleaseTarget(operating_system="any", architecture="any", ros_distro="humble")})
 
     # Unknown host ROS environment
     res = verifier.verify_target_compatibility(man_ros, current_ros_distro=None)

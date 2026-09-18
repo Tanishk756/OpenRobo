@@ -30,10 +30,12 @@ from openrobo_agent.transport import HttpTransportClient
 
 def create_test_ca(common_name: str = "Test Root CA") -> Tuple[ed25519.Ed25519PrivateKey, x509.Certificate]:
     priv, pub = generate_keypair()
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Test"),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Test"),
+        ]
+    )
     now = datetime.now(timezone.utc)
     cert = (
         x509.CertificateBuilder()
@@ -56,15 +58,19 @@ def create_signed_server_cert(
     ip: str = "127.0.0.1",
 ) -> Tuple[ed25519.Ed25519PrivateKey, x509.Certificate]:
     priv, pub = generate_keypair()
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, hostname),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Test Server"),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, hostname),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Test Server"),
+        ]
+    )
     now = datetime.now(timezone.utc)
-    san = x509.SubjectAlternativeName([
-        x509.DNSName(hostname),
-        x509.IPAddress(ipaddress.ip_address(ip)),
-    ])
+    san = x509.SubjectAlternativeName(
+        [
+            x509.DNSName(hostname),
+            x509.IPAddress(ipaddress.ip_address(ip)),
+        ]
+    )
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -86,10 +92,12 @@ def create_signed_client_cert(
     device_id: str,
 ) -> Tuple[ed25519.Ed25519PrivateKey, x509.Certificate]:
     priv, pub = generate_keypair()
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, f"openrobo-device:{device_id}"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Fleet"),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, f"openrobo-device:{device_id}"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "OpenRobo Fleet"),
+        ]
+    )
     now = datetime.now(timezone.utc)
     cert = (
         x509.CertificateBuilder()

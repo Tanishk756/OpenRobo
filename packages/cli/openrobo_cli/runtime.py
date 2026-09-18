@@ -1,4 +1,4 @@
-﻿"""OpenRobo CLI Runtime Commands (Milestone 6)."""
+"""OpenRobo CLI Runtime Commands (Milestone 6)."""
 
 from pathlib import Path
 from typing import Optional

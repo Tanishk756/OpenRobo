@@ -1,4 +1,4 @@
-﻿"""Live ROS 2 Graph Collector using rclpy or safe CLI fallback."""
+"""Live ROS 2 Graph Collector using rclpy or safe CLI fallback."""
 
 import logging
 import shutil
@@ -78,18 +78,20 @@ class LiveRosGraphCollector:
                 sub_topics = [t[0] for t in temp_node.get_subscriber_names_and_types_by_node(name, ns)]
                 services = [s[0] for s in temp_node.get_service_names_and_types_by_node(name, ns)]
 
-                nodes.append({
-                    "name": name,
-                    "namespace": ns,
-                    "full_name": full_name,
-                    "is_present": True,
-                    "is_alive": True,
-                    "pid": None,  # Provenance: cannot be verified from ROS graph alone
-                    "publisher_topics": pub_topics,
-                    "subscriber_topics": sub_topics,
-                    "services": services,
-                    "actions": [],
-                })
+                nodes.append(
+                    {
+                        "name": name,
+                        "namespace": ns,
+                        "full_name": full_name,
+                        "is_present": True,
+                        "is_alive": True,
+                        "pid": None,  # Provenance: cannot be verified from ROS graph alone
+                        "publisher_topics": pub_topics,
+                        "subscriber_topics": sub_topics,
+                        "services": services,
+                        "actions": [],
+                    }
+                )
 
             # 2. Get topics and QoS
             topic_names_and_types = temp_node.get_topic_names_and_types()
@@ -112,14 +114,16 @@ class LiveRosGraphCollector:
                 pub_qos = self._extract_qos_dict(pubs_info[0].qos_profile) if pubs_info else {}
                 sub_qos = self._extract_qos_dict(subs_info[0].qos_profile) if subs_info else {}
 
-                topics.append({
-                    "name": topic_name,
-                    "type": primary_type,
-                    "publishers": pub_names,
-                    "subscribers": sub_names,
-                    "publisher_qos": pub_qos,
-                    "subscriber_qos": sub_qos,
-                })
+                topics.append(
+                    {
+                        "name": topic_name,
+                        "type": primary_type,
+                        "publishers": pub_names,
+                        "subscribers": sub_names,
+                        "publisher_qos": pub_qos,
+                        "subscriber_qos": sub_qos,
+                    }
+                )
 
             return {
                 "status": "COLLECTED_VIA_RCLPY",
@@ -168,18 +172,20 @@ class LiveRosGraphCollector:
                     parts = name.rsplit("/", 1)
                     ns = f"/{parts[0]}"
                     name = parts[1]
-                nodes.append({
-                    "name": name,
-                    "namespace": ns,
-                    "full_name": n,
-                    "is_present": True,
-                    "is_alive": True,
-                    "pid": None,
-                    "publisher_topics": [],
-                    "subscriber_topics": [],
-                    "services": [],
-                    "actions": [],
-                })
+                nodes.append(
+                    {
+                        "name": name,
+                        "namespace": ns,
+                        "full_name": n,
+                        "is_present": True,
+                        "is_alive": True,
+                        "pid": None,
+                        "publisher_topics": [],
+                        "subscriber_topics": [],
+                        "services": [],
+                        "actions": [],
+                    }
+                )
 
             # Topics
             topic_out = subprocess.run([ros2_cmd, "topic", "list", "-t"], capture_output=True, text=True, timeout=5)
@@ -191,14 +197,16 @@ class LiveRosGraphCollector:
                 parts = line.split(" [")
                 tname = parts[0].strip()
                 ttype = parts[1].rstrip("]").strip()
-                topics.append({
-                    "name": tname,
-                    "type": ttype,
-                    "publishers": [],
-                    "subscribers": [],
-                    "publisher_qos": {},
-                    "subscriber_qos": {},
-                })
+                topics.append(
+                    {
+                        "name": tname,
+                        "type": ttype,
+                        "publishers": [],
+                        "subscribers": [],
+                        "publisher_qos": {},
+                        "subscriber_qos": {},
+                    }
+                )
 
             return {
                 "status": "COLLECTED_VIA_CLI",

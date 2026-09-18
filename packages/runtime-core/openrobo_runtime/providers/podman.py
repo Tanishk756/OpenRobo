@@ -1,4 +1,4 @@
-﻿"""Podman Execution Provider for rootless containerized verification."""
+"""Podman Execution Provider for rootless containerized verification."""
 
 import shutil
 import subprocess

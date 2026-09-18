@@ -13,12 +13,12 @@ def utc_now() -> datetime:
 
 
 class FleetDeviceModel(Base):
-    __tablename__ = 'fleet_devices'
+    __tablename__ = "fleet_devices"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(sa.String(255), nullable=False, index=True)
-    domain: Mapped[str] = mapped_column(sa.String(100), nullable=False, default='general_robotics')
-    robot_type: Mapped[str] = mapped_column(sa.String(100), nullable=False, default='custom')
+    domain: Mapped[str] = mapped_column(sa.String(100), nullable=False, default="general_robotics")
+    robot_type: Mapped[str] = mapped_column(sa.String(100), nullable=False, default="custom")
 
     # Certificate & Security Identity
     certificate_fingerprint: Mapped[str] = mapped_column(sa.String(64), unique=True, index=True, nullable=False)
@@ -26,7 +26,7 @@ class FleetDeviceModel(Base):
     certificate_pem: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
 
     # Status & Revocation
-    status: Mapped[str] = mapped_column(sa.String(50), nullable=False, default='ENROLLED')
+    status: Mapped[str] = mapped_column(sa.String(50), nullable=False, default="ENROLLED")
     revoked_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     revocation_reason: Mapped[Optional[str]] = mapped_column(sa.String(255), nullable=True)
 
@@ -38,16 +38,16 @@ class FleetDeviceModel(Base):
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
-    heartbeats: Mapped[List['AgentHeartbeatModel']] = relationship(
-        'AgentHeartbeatModel', back_populates='device', cascade='all, delete-orphan'
+    heartbeats: Mapped[List["AgentHeartbeatModel"]] = relationship(
+        "AgentHeartbeatModel", back_populates="device", cascade="all, delete-orphan"
     )
-    telemetry_events: Mapped[List['AgentTelemetryEventModel']] = relationship(
-        'AgentTelemetryEventModel', back_populates='device', cascade='all, delete-orphan'
+    telemetry_events: Mapped[List["AgentTelemetryEventModel"]] = relationship(
+        "AgentTelemetryEventModel", back_populates="device", cascade="all, delete-orphan"
     )
 
 
 class AgentEnrollmentTokenModel(Base):
-    __tablename__ = 'agent_enrollment_tokens'
+    __tablename__ = "agent_enrollment_tokens"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     token_hash: Mapped[str] = mapped_column(sa.String(64), unique=True, index=True, nullable=False)
@@ -60,27 +60,27 @@ class AgentEnrollmentTokenModel(Base):
 
 
 class AgentHeartbeatModel(Base):
-    __tablename__ = 'agent_heartbeats'
+    __tablename__ = "agent_heartbeats"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    device_id: Mapped[str] = mapped_column(sa.String(36), sa.ForeignKey('fleet_devices.id', ondelete='CASCADE'), index=True, nullable=False)
+    device_id: Mapped[str] = mapped_column(sa.String(36), sa.ForeignKey("fleet_devices.id", ondelete="CASCADE"), index=True, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(sa.String(50), nullable=False)
     payload_json: Mapped[Dict[str, Any]] = mapped_column(sa.JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
 
-    device: Mapped['FleetDeviceModel'] = relationship('FleetDeviceModel', back_populates='heartbeats')
+    device: Mapped["FleetDeviceModel"] = relationship("FleetDeviceModel", back_populates="heartbeats")
 
 
 class AgentTelemetryEventModel(Base):
-    __tablename__ = 'agent_telemetry_events'
+    __tablename__ = "agent_telemetry_events"
 
     id: Mapped[str] = mapped_column(sa.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    device_id: Mapped[str] = mapped_column(sa.String(36), sa.ForeignKey('fleet_devices.id', ondelete='CASCADE'), index=True, nullable=False)
+    device_id: Mapped[str] = mapped_column(sa.String(36), sa.ForeignKey("fleet_devices.id", ondelete="CASCADE"), index=True, nullable=False)
     message_id: Mapped[str] = mapped_column(sa.String(64), unique=True, index=True, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     event_type: Mapped[str] = mapped_column(sa.String(100), nullable=False)
     payload_json: Mapped[Dict[str, Any]] = mapped_column(sa.JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)
 
-    device: Mapped['FleetDeviceModel'] = relationship('FleetDeviceModel', back_populates='telemetry_events')
+    device: Mapped["FleetDeviceModel"] = relationship("FleetDeviceModel", back_populates="telemetry_events")

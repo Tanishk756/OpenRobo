@@ -104,14 +104,16 @@ def test_crash_intent_journal_startup_reconciliation(tmp_path):
     (dep_root / "current.ptr").write_text("slot-b", encoding="utf-8")
     journal_file = dep_root / "activation.intent.json"
     journal_file.write_text(
-        json.dumps({
-            "transaction_id": "tx-123",
-            "from_slot": "slot-a",
-            "to_slot": "slot-b",
-            "release_id": "rel-002",
-            "state": "SWITCHED",
-            "created_at": "2026-09-18T00:00:00Z",
-        }),
+        json.dumps(
+            {
+                "transaction_id": "tx-123",
+                "from_slot": "slot-a",
+                "to_slot": "slot-b",
+                "release_id": "rel-002",
+                "state": "SWITCHED",
+                "created_at": "2026-09-18T00:00:00Z",
+            }
+        ),
         encoding="utf-8",
     )
 

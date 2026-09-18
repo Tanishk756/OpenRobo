@@ -1,4 +1,4 @@
-﻿"""Gazebo Simulator Adapter for OpenRobo Workspace Generator (Hardened).
+"""Gazebo Simulator Adapter for OpenRobo Workspace Generator (Hardened).
 
 Provides generic simulation clock bridging and launch scaffolding.
 Does not invent robot SDF, sensor topics, or world models unless supplied in configuration.

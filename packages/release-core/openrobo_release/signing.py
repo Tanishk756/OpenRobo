@@ -33,6 +33,7 @@ def validate_private_key_file(path: Path | str) -> None:
         mode = key_path.stat().st_mode
         if mode & (stat.S_IRWXG | stat.S_IRWXO):
             import warnings
+
             warnings.warn(f"Private key file {key_path} has loose permissions ({oct(mode)}). Recommended: 0600.")
 
     # Try loading as Ed25519
@@ -98,9 +99,7 @@ class ReleaseSigner:
     def sign_manifest(self, manifest: ReleaseManifest) -> str:
         """Signs the canonical bytes of a release manifest and returns base64 detached signature."""
         if manifest.release_key_id != self.key_id:
-            raise ValueError(
-                f"Manifest release_key_id ({manifest.release_key_id}) does not match signer key_id ({self.key_id})."
-            )
+            raise ValueError(f"Manifest release_key_id ({manifest.release_key_id}) does not match signer key_id ({self.key_id}).")
 
         canonical_bytes = canonical_manifest_bytes(manifest)
         signature = self._private_key.sign(canonical_bytes)

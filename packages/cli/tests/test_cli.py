@@ -1,4 +1,4 @@
-﻿from openrobo_cli.main import app
+from openrobo_cli.main import app
 from typer.testing import CliRunner
 
 runner = CliRunner()

@@ -17,12 +17,14 @@ def generate_benchmark_manifest(num_resources: int) -> dict:
         else:
             rid = f"sensor_module_{i}"
             rname = f"Sensor Module {i}"
-        resources.append({
-            "id": rid,
-            "name": rname,
-            "version": f"1.{i}.0",
-            "category": "sensors" if i >= len(known_adapters) else "general",
-        })
+        resources.append(
+            {
+                "id": rid,
+                "name": rname,
+                "version": f"1.{i}.0",
+                "category": "sensors" if i >= len(known_adapters) else "general",
+            }
+        )
 
     return {
         "id": f"benchmark_stack_{num_resources}",

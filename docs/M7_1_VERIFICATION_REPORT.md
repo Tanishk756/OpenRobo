@@ -1,4 +1,4 @@
-﻿# OpenRobo Milestone 7.1 & 7.1.1 - Verification Report
+# OpenRobo Milestone 7.1 & 7.1.1 - Verification Report
 **Date:** September 17, 2026
 **Status:** LOCALLY ACCEPTANCE VERIFIED & LOAD SIMULATED
 **Branch:** `feature/m7-fleet-security-closure`

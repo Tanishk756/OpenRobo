@@ -1,4 +1,4 @@
-﻿"""SLAM Toolbox Adapter for OpenRobo Workspace Generator (Hardened).
+"""SLAM Toolbox Adapter for OpenRobo Workspace Generator (Hardened).
 
 Separates safe framework defaults from robot-specific assumptions.
 Supports user frame/topic overrides and safe YAML dumping.

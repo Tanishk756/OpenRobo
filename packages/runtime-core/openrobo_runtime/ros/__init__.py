@@ -1,4 +1,4 @@
-﻿"""OpenRobo ROS 2 Runtime Integration Subsystem."""
+"""OpenRobo ROS 2 Runtime Integration Subsystem."""
 
 from openrobo_runtime.ros.availability import RosEnvironmentDetector
 from openrobo_runtime.ros.collector import LiveRosGraphCollector

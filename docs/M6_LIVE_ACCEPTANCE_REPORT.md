@@ -1,4 +1,4 @@
-﻿# Milestone 6.2 — Live Runtime Proof, End-to-End Acceptance & Release Readiness Report
+# Milestone 6.2 — Live Runtime Proof, End-to-End Acceptance & Release Readiness Report
 
 **Milestone:** M6.2 — Live Runtime Proof, End-to-End Acceptance & Release Readiness
 **Project:** OpenRobo

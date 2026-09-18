@@ -25,8 +25,20 @@ def sanitize_telemetry_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Ensure telemetry dictionaries do not leak environment variables, passwords, or PII."""
     sanitized: Dict[str, Any] = {}
     blocked_keys = {
-        "env", "environment", "environ", "password", "secret", "token", "key",
-        "auth", "credential", "ssid", "wifi", "username", "home", "user",
+        "env",
+        "environment",
+        "environ",
+        "password",
+        "secret",
+        "token",
+        "key",
+        "auth",
+        "credential",
+        "ssid",
+        "wifi",
+        "username",
+        "home",
+        "user",
     }
 
     for k, v in payload.items():
@@ -71,5 +83,6 @@ def set_secure_file_permissions(path: Path, mode: int = 0o600) -> None:
             os.chmod(path, mode)
         except Exception:
             pass
+
 
 check_file_permissions = validate_file_permissions

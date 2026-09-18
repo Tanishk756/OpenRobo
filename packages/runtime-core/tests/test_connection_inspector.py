@@ -1,4 +1,4 @@
-﻿from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from openrobo_runtime.integrations.connection_inspector import ConnectionInspectorAdapter
 from openrobo_runtime.models import ConnectionInspectorStatus, DistroReleaseSupport

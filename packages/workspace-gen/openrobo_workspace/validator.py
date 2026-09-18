@@ -1,4 +1,4 @@
-﻿"""Static Generated-Workspace Validator.
+"""Static Generated-Workspace Validator.
 
 Performs deterministic static analysis on generated workspace artifacts
 (XML, Python AST, YAML, JSON, ROS naming, file references).
@@ -60,18 +60,14 @@ class WorkspaceValidator:
                 else:
                     pkg_name = name_elem.text.strip()
                     if not ROS_PKG_REGEX.match(pkg_name):
-                        errors.append(
-                            f"{pxml.path}: Package name '{pkg_name}' violates ROS 2 naming conventions"
-                        )
+                        errors.append(f"{pxml.path}: Package name '{pkg_name}' violates ROS 2 naming conventions")
                 maintainer_elem = root.find("maintainer")
                 if maintainer_elem is None:
                     errors.append(f"{pxml.path}: Missing required <maintainer> element")
                 else:
                     email = maintainer_elem.get("email", "")
                     if "placeholder" in email.lower() or "unspecified" in email.lower():
-                        warnings.append(
-                            f"{pxml.path}: Maintainer email is a placeholder ('{email}')."
-                        )
+                        warnings.append(f"{pxml.path}: Maintainer email is a placeholder ('{email}').")
                 license_elem = root.find("license")
                 if license_elem is None:
                     errors.append(f"{pxml.path}: Missing required <license> element")

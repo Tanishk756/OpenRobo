@@ -1,4 +1,4 @@
-﻿# Contributing to OpenRobo
+# Contributing to OpenRobo
 
 Thank you for your interest in contributing to **OpenRobo**! OpenRobo is a vendor-neutral, community-driven robotics platform dedicated to standardizing component metadata, reasoning about cross-package compatibility, and generating reproducible developer environments for robotics engineers worldwide.
 

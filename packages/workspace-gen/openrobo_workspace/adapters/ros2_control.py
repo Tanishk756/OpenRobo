@@ -1,4 +1,4 @@
-﻿"""ros2_control Adapter for OpenRobo Workspace Generator (Hardened).
+"""ros2_control Adapter for OpenRobo Workspace Generator (Hardened).
 
 STRICT SAFETY POLICY:
 Never emit guessed robot-specific values (wheel joints, separation, radius).

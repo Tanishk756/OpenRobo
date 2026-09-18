@@ -132,15 +132,19 @@ class DeviceIdentityManager:
 
     def enroll(self, token: str, capabilities: Optional[List[Any]] = None) -> DeviceIdentity:
         import httpx
+
         csr_pem = self.create_csr()
         url = self.config.control_plane_url.rstrip("/")
-        res = httpx.post(f"{url}/api/v1/fleet/enroll", json={
-            "enrollment_token": token,
-            "device_id": self.device_id,
-            "device_name": self.config.display_name,
-            "csr_pem": csr_pem,
-            "capabilities": capabilities or [],
-        })
+        res = httpx.post(
+            f"{url}/api/v1/fleet/enroll",
+            json={
+                "enrollment_token": token,
+                "device_id": self.device_id,
+                "device_name": self.config.display_name,
+                "csr_pem": csr_pem,
+                "capabilities": capabilities or [],
+            },
+        )
         if res.status_code != 200:
             raise RuntimeError(f"Enrollment failed ({res.status_code}): {res.text}")
         data = res.json()

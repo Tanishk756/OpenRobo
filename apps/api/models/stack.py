@@ -29,6 +29,4 @@ class StackModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
-    __table_args__ = (
-        Index("ix_stacks_updated_at", "updated_at"),
-    )
+    __table_args__ = (Index("ix_stacks_updated_at", "updated_at"),)

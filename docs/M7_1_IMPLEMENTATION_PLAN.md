@@ -1,4 +1,4 @@
-﻿# Milestone 7.1 — Secure Remote Agent, Device Identity & Fleet Foundation Implementation Plan
+# Milestone 7.1 — Secure Remote Agent, Device Identity & Fleet Foundation Implementation Plan
 
 **Milestone:** M7.1 — Secure Remote Agent, Device Identity & Fleet Foundation
 **Project:** OpenRobo

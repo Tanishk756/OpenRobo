@@ -1,4 +1,4 @@
-﻿# Milestone 7.1 Security Audit & Vulnerability Remediation Report
+# Milestone 7.1 Security Audit & Vulnerability Remediation Report
 
 **Date**: September 17, 2026
 **Auditor**: OpenRobo Fleet Security Team
