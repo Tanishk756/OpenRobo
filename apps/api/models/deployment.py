@@ -88,6 +88,7 @@ class DeploymentModel(Base):
     version: Mapped[int] = mapped_column(sa.Integer, default=1, nullable=False)  # Optimistic concurrency
     idempotency_key: Mapped[Optional[str]] = mapped_column(sa.String(128), unique=True, index=True, nullable=True)
     request_digest: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)
+    paused_from_state: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)
 
     created_by: Mapped[str] = mapped_column(sa.String(128), default="configured-admin", nullable=False)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), default=utc_now, nullable=False)

@@ -15,6 +15,12 @@ from openrobo_agent.deployment.artifact_client import (
 )
 
 
+@pytest.fixture(autouse=True)
+def setup_dev_env(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("OPENROBO_ALLOW_DEV_ARTIFACT_HTTP", "true")
+
+
 def test_ssrf_url_validation():
     # 1. Embedded credentials rejection
     with pytest.raises(SSRFValidationError, match="credentials"):

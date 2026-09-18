@@ -2,10 +2,14 @@
 
 import hashlib
 import json
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+CANONICAL_PROTOCOL_VERSION = "1.0.0"
+SUPPORTED_PROTOCOL_VERSIONS: Set[str] = {"1.0.0"}
 
 
 class DeploymentState(str, Enum):
@@ -108,6 +112,8 @@ class RolloutStrategy(BaseModel):
     def validate_cumulative_stages(cls, v: List[CanaryStageConfig]) -> List[CanaryStageConfig]:
         if not v:
             return v
+        if len(v) > 3:
+            raise ValueError("Maximum 3 canary stages (Stage 0, Stage 1, Stage 2) are supported by OpenRobo deployment state machine.")
         pcts = [s.target_percentage for s in v]
         for i in range(len(pcts)):
             if pcts[i] > 100:
@@ -174,9 +180,34 @@ class GetDeploymentStatusPayload(BaseModel):
     deployment_id: str
 
 
+def validate_iso8601_timestamp(ts_str: str, field_name: str = "timestamp") -> datetime:
+    """Validates that a string is a valid ISO-8601 timestamp with timezone information."""
+    if not isinstance(ts_str, str) or not ts_str.strip():
+        raise ValueError(f"{field_name} must be a non-empty ISO-8601 string")
+    try:
+        dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+    except Exception as e:
+        raise ValueError(f"{field_name} is not a valid ISO-8601 timestamp: {e}") from e
+    if dt.tzinfo is None:
+        raise ValueError(f"{field_name} must be timezone-aware (UTC required)")
+    return dt
+
+
+def compute_payload_digest(payload: Union[Dict[str, Any], BaseModel, Any]) -> str:
+    """Compute deterministic SHA-256 digest of an instruction payload."""
+    if isinstance(payload, BaseModel):
+        payload_dict = payload.model_dump(mode="json", exclude_none=True)
+    elif isinstance(payload, dict):
+        payload_dict = payload
+    else:
+        payload_dict = dict(payload)
+    canon = json.dumps(payload_dict, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
 def canonical_instruction_digest(envelope: Union["DeploymentInstructionEnvelope", dict]) -> str:
     if isinstance(envelope, dict):
-        proto = envelope.get("protocol_version", "1.0")
+        proto = envelope.get("protocol_version", CANONICAL_PROTOCOL_VERSION)
         inst_id = envelope.get("instruction_id")
         dep_id = envelope.get("deployment_id")
         dev_id = envelope.get("device_id")
@@ -212,10 +243,11 @@ def canonical_instruction_digest(envelope: Union["DeploymentInstructionEnvelope"
 
 
 class DeploymentInstructionEnvelope(BaseModel):
-    protocol_version: str = Field(default="1.0")
+    model_config = ConfigDict(extra="forbid")
+    protocol_version: str = Field(default=CANONICAL_PROTOCOL_VERSION)
     instruction_id: str
     deployment_id: str
-    device_id: Optional[str] = "unknown"
+    device_id: str  # Required - no default "unknown"
     generation: int
     instruction_type: InstructionType
     payload: Dict[str, Any]
@@ -223,12 +255,20 @@ class DeploymentInstructionEnvelope(BaseModel):
     created_at: str
     expires_at: str
 
+    @field_validator("device_id")
+    @classmethod
+    def validate_device_id_non_empty(cls, v: str) -> str:
+        if not v or not v.strip() or v.strip().lower() == "unknown":
+            raise ValueError("device_id must be a non-empty enrolled device identity string")
+        return v.strip()
+
     def get_canonical_instruction_digest(self) -> str:
         return canonical_instruction_digest(self)
 
 
 class DeploymentAckEnvelope(BaseModel):
-    protocol_version: str = Field(default="1.0")
+    model_config = ConfigDict(extra="forbid")
+    protocol_version: str = Field(default=CANONICAL_PROTOCOL_VERSION)
     ack_id: str
     instruction_id: str
     deployment_id: str
@@ -247,7 +287,8 @@ class DeploymentAckEnvelope(BaseModel):
 
 
 class DeploymentStatusReport(BaseModel):
-    protocol_version: str = Field(default="1.0")
+    model_config = ConfigDict(extra="forbid")
+    protocol_version: str = Field(default=CANONICAL_PROTOCOL_VERSION)
     report_id: str
     instruction_id: str
     deployment_id: str
@@ -263,7 +304,8 @@ class DeploymentStatusReport(BaseModel):
 
 
 class DeploymentEventPayload(BaseModel):
-    protocol_version: str = Field(default="1.0")
+    model_config = ConfigDict(extra="forbid")
+    protocol_version: str = Field(default=CANONICAL_PROTOCOL_VERSION)
     event_id: str
     deployment_id: str
     device_id: str
@@ -315,7 +357,6 @@ DEPLOYMENT_TRANSITIONS: Dict[DeploymentState, Set[DeploymentState]] = {
     DeploymentState.ACTIVATING_STAGE_0: {
         DeploymentState.STAGE_0_ACTIVE,
         DeploymentState.STAGE_0_WAITING_FOR_STAGE_APPROVAL,
-        DeploymentState.STAGE_1_WAITING_FOR_STAGING_APPROVAL,
         DeploymentState.COMPLETED,
         DeploymentState.STAGE_0_FAILED,
         DeploymentState.PAUSED,
@@ -324,15 +365,7 @@ DEPLOYMENT_TRANSITIONS: Dict[DeploymentState, Set[DeploymentState]] = {
         DeploymentState.FAILED,
     },
     DeploymentState.STAGE_0_ACTIVE: {
-        DeploymentState.STAGE_1_WAITING_FOR_STAGING_APPROVAL,
         DeploymentState.STAGE_0_WAITING_FOR_STAGE_APPROVAL,
-        DeploymentState.COMPLETED,
-        DeploymentState.PAUSED,
-        DeploymentState.CANCELLING,
-        DeploymentState.CANCELLED,
-        DeploymentState.FAILED,
-    },
-    DeploymentState.STAGE_0_WAITING_FOR_STAGE_APPROVAL: {
         DeploymentState.STAGE_1_STAGING,
         DeploymentState.COMPLETED,
         DeploymentState.PAUSED,
@@ -340,7 +373,7 @@ DEPLOYMENT_TRANSITIONS: Dict[DeploymentState, Set[DeploymentState]] = {
         DeploymentState.CANCELLED,
         DeploymentState.FAILED,
     },
-    DeploymentState.STAGE_1_WAITING_FOR_STAGING_APPROVAL: {
+    DeploymentState.STAGE_0_WAITING_FOR_STAGE_APPROVAL: {
         DeploymentState.STAGE_1_STAGING,
         DeploymentState.COMPLETED,
         DeploymentState.PAUSED,
@@ -366,7 +399,6 @@ DEPLOYMENT_TRANSITIONS: Dict[DeploymentState, Set[DeploymentState]] = {
     DeploymentState.ACTIVATING_STAGE_1: {
         DeploymentState.STAGE_1_ACTIVE,
         DeploymentState.STAGE_1_WAITING_FOR_STAGE_APPROVAL,
-        DeploymentState.STAGE_2_WAITING_FOR_STAGING_APPROVAL,
         DeploymentState.COMPLETED,
         DeploymentState.STAGE_1_FAILED,
         DeploymentState.PAUSED,
@@ -375,7 +407,7 @@ DEPLOYMENT_TRANSITIONS: Dict[DeploymentState, Set[DeploymentState]] = {
         DeploymentState.FAILED,
     },
     DeploymentState.STAGE_1_ACTIVE: {
-        DeploymentState.STAGE_2_WAITING_FOR_STAGING_APPROVAL,
+        DeploymentState.STAGE_2_STAGING,
         DeploymentState.STAGE_1_WAITING_FOR_STAGE_APPROVAL,
         DeploymentState.COMPLETED,
         DeploymentState.PAUSED,

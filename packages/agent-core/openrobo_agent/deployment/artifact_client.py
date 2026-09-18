@@ -45,90 +45,98 @@ def validate_artifact_url(
     except Exception as e:
         raise SSRFValidationError(f"Malformed artifact URL '{url}': {e}")
 
+    if parsed.username or parsed.password:
+        raise SSRFValidationError(f"Artifact URL '{url}' contains embedded user credentials which are prohibited.")
+
+    if parsed.query or parsed.fragment:
+        raise SSRFValidationError(f"Query parameters and URL fragments are strictly prohibited on artifact URLs: '{url}'")
+
     # Scheme policy: HTTPS mandatory in production. HTTP permitted only when
-    # dev environment + flag are set or in local/private tests with allow_private_network.
+    # dev environment + flag are set or allow_http_dev is explicitly True.
+    # No implicit localhost/loopback exception in production.
     if parsed.scheme.lower() == "http":
         env_mode = os.environ.get("ENVIRONMENT", "").lower()
         dev_flag = os.environ.get("OPENROBO_ALLOW_DEV_ARTIFACT_HTTP", "").lower() in ("true", "1", "yes")
-        is_loopback = parsed.hostname in ("127.0.0.1", "localhost", "::1") and allow_private_network
-        if not (allow_http_dev or is_loopback or (env_mode in ("development", "test") and dev_flag)):
+        is_dev_authorized = allow_http_dev or (env_mode in ("development", "test") and dev_flag)
+        if not is_dev_authorized:
             raise SSRFValidationError(
                 f"Insecure HTTP artifact URL '{url}' is prohibited in production. "
                 "HTTPS is required unless ENVIRONMENT=development and OPENROBO_ALLOW_DEV_ARTIFACT_HTTP=true."
             )
     elif parsed.scheme.lower() != "https":
-        raise SSRFValidationError(f"Invalid artifact URL scheme '{parsed.scheme}'. Only HTTPS is permitted.")
-
-    if parsed.username or parsed.password:
-        raise SSRFValidationError("Embedded credentials in artifact URLs are prohibited.")
-
-    if parsed.query or parsed.fragment:
-        raise SSRFValidationError("Query parameters and fragments in artifact URLs are prohibited.")
+        raise SSRFValidationError(f"Unsupported URL scheme '{parsed.scheme}'. Only HTTPS is permitted.")
 
     hostname = parsed.hostname
     if not hostname:
-        raise SSRFValidationError("Artifact URL missing hostname.")
+        raise SSRFValidationError(f"Missing hostname in artifact URL '{url}'")
 
-    if custom_allowed_host and hostname.lower() != custom_allowed_host.lower():
-        raise SSRFValidationError(f"Artifact hostname '{hostname}' does not match allowed host '{custom_allowed_host}'")
+    # Host validation against allowed authority
+    if custom_allowed_host:
+        if hostname.lower() != custom_allowed_host.lower():
+            raise SSRFValidationError(
+                f"Artifact host '{hostname}' does not match allowed host '{custom_allowed_host}'"
+            )
 
-    # Resolve all DNS addresses
+    # Resolve IP address to detect SSRF attempts against link-local/cloud metadata
     try:
-        addr_info = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
+        resolved_ips = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80))
     except Exception as e:
-        raise SSRFValidationError(f"Failed to resolve artifact hostname '{hostname}': {e}")
+        raise SSRFValidationError(f"Failed to resolve hostname '{hostname}': {e}")
 
-    for item in addr_info:
-        ip_str = item[4][0]
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError:
-            continue
+    for addr_info in resolved_ips:
+        ip_str = addr_info[4][0]
+        ip_obj = ipaddress.ip_address(ip_str)
 
-        if ip in BLOCKED_IPS:
-            raise SSRFValidationError(f"Access to cloud metadata IP '{ip}' is blocked.")
+        if ip_obj in BLOCKED_IPS:
+            raise SSRFValidationError(f"Target IP '{ip_str}' is explicitly blocked (Cloud Metadata Endpoint)")
 
+        if ip_obj.is_link_local:
+            raise SSRFValidationError(f"Target IP '{ip_str}' is link-local, which is prohibited")
+
+        # In production without allow_private_network, block private IP ranges and loopback
         if not allow_private_network:
-            if ip.is_loopback:
-                raise SSRFValidationError(f"Access to loopback IP '{ip}' is blocked.")
-            if ip.is_link_local:
-                raise SSRFValidationError(f"Access to link-local IP '{ip}' is blocked.")
-            if ip.is_private:
-                raise SSRFValidationError(f"Access to private network IP '{ip}' is blocked.")
-            if ip.is_multicast or ip.is_unspecified or ip.is_reserved:
-                raise SSRFValidationError(f"Access to reserved/multicast IP '{ip}' is blocked.")
+            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved:
+                raise SSRFValidationError(f"Target IP '{ip_str}' is a private or loopback address (SSRF prohibited)")
 
     return url
 
 
 class ArtifactClient:
+    """Streaming, memory-bounded, SSRF-validated artifact downloader for OpenRobo Agent."""
+
     def __init__(
         self,
         downloads_dir: Path,
-        max_artifact_bytes: int = 104857600,  # 100 MB default
+        max_artifact_bytes: int = 104857600,  # 100 MB default limit
+        timeout: float = 30.0,
         allow_private_network: bool = False,
         allow_http_dev: bool = False,
         ssl_context: Optional[ssl.SSLContext] = None,
-        timeout_seconds: float = 30.0,
     ):
         self.downloads_dir = Path(downloads_dir)
-        self.downloads_dir.mkdir(parents=True, exist_ok=True)
         self.max_artifact_bytes = max_artifact_bytes
+        self.timeout = timeout
         self.allow_private_network = allow_private_network
         self.allow_http_dev = allow_http_dev
         self.ssl_context = ssl_context
-        self.timeout = httpx.Timeout(timeout_seconds, connect=10.0)
+        self.downloads_dir.mkdir(parents=True, exist_ok=True)
 
-    def check_disk_space(self, target_dir: Path, required_bytes: int, safety_margin_bytes: int = 52428800) -> None:
-        """Inspects available free disk space before starting a transfer/staging operation."""
-        target_dir.mkdir(parents=True, exist_ok=True)
-        usage = shutil.disk_usage(target_dir)
-        total_needed = required_bytes + safety_margin_bytes
-        if usage.free < total_needed:
-            raise ArtifactDownloadError(
-                f"Insufficient disk space on {target_dir}: available {usage.free} bytes, "
-                f"required {total_needed} bytes (artifact {required_bytes} + safety margin {safety_margin_bytes})"
+    def check_disk_space(self, target_dir: Path, required_bytes: int) -> None:
+        """Verifies destination directory has sufficient space before starting transfer."""
+        stat = shutil.disk_usage(target_dir)
+        # Require at least 2x required bytes to allow extraction and swap
+        if stat.free < (required_bytes * 2):
+            raise ArtifactVerificationError(
+                f"Insufficient disk space in {target_dir}: {stat.free} bytes free, "
+                f"requires {required_bytes * 2} bytes"
             )
+
+    def _get_verify_param(self, ca_cert_path: Optional[str] = None):
+        if ca_cert_path:
+            return ca_cert_path
+        if self.ssl_context:
+            return self.ssl_context
+        return True
 
     async def download_and_verify(
         self,
@@ -138,6 +146,7 @@ class ArtifactClient:
         allowed_host: Optional[str] = None,
         allow_private_network: Optional[bool] = None,
         max_bytes: Optional[int] = None,
+        ca_cert_path: Optional[str] = None,
     ) -> Path:
         effective_max = max_bytes or self.max_artifact_bytes
 
@@ -170,9 +179,10 @@ class ArtifactClient:
 
         hasher = hashlib.sha256()
         total_bytes = 0
+        verify_param = self._get_verify_param(ca_cert_path)
 
         async with httpx.AsyncClient(
-            verify=self.ssl_context if self.ssl_context else True,
+            verify=verify_param,
             timeout=self.timeout,
             follow_redirects=False,
         ) as client:
@@ -238,6 +248,7 @@ class ArtifactClient:
         allowed_host: Optional[str] = None,
         allow_private_network: Optional[bool] = None,
         max_bytes: int = 1048576,  # 1 MiB max
+        ca_cert_path: Optional[str] = None,
     ) -> tuple[bytes, ReleaseManifest]:
         """Streams manifest with bounded size limit, parses it, and validates canonical manifest digest."""
         allow_priv = self.allow_private_network if allow_private_network is None else allow_private_network
@@ -249,8 +260,9 @@ class ArtifactClient:
         )
 
         buffer = bytearray()
+        verify_param = self._get_verify_param(ca_cert_path)
         async with httpx.AsyncClient(
-            verify=self.ssl_context if self.ssl_context else True,
+            verify=verify_param,
             timeout=self.timeout,
             follow_redirects=False,
         ) as client:
@@ -284,6 +296,7 @@ class ArtifactClient:
         allowed_host: Optional[str] = None,
         allow_private_network: Optional[bool] = None,
         max_bytes: int = 8192,  # 8 KiB max
+        ca_cert_path: Optional[str] = None,
     ) -> str:
         """Streams detached signature with bounded size limit."""
         allow_priv = self.allow_private_network if allow_private_network is None else allow_private_network
@@ -295,8 +308,9 @@ class ArtifactClient:
         )
 
         buffer = bytearray()
+        verify_param = self._get_verify_param(ca_cert_path)
         async with httpx.AsyncClient(
-            verify=self.ssl_context if self.ssl_context else True,
+            verify=verify_param,
             timeout=self.timeout,
             follow_redirects=False,
         ) as client:

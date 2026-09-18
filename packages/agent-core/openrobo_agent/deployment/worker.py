@@ -1,21 +1,29 @@
 # Autonomous deployment execution worker, atomic generation persistence, durable job journal, and A/B staging/activation runner.
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, Optional
 
 from openrobo_release.deployment_protocol import (
+    CANONICAL_PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS,
+    ActivateReleasePayload,
+    CancelDeploymentPayload,
     DeploymentAckEnvelope,
     DeploymentInstructionEnvelope,
     DeploymentStatusReport,
     DeviceDeploymentState,
+    GetDeploymentStatusPayload,
     InstructionType,
+    StageReleasePayload,
     canonical_instruction_digest,
+    validate_iso8601_timestamp,
 )
 from openrobo_release.trust_store import TrustedReleaseKeyStore
 
@@ -28,6 +36,8 @@ from openrobo_agent.deployment.staging import stage_release_artifact
 
 logger = logging.getLogger("openrobo.agent.worker")
 
+MAX_CLOCK_SKEW_SEC = 300.0
+
 
 class DeploymentError(Exception):
     pass
@@ -35,6 +45,12 @@ class DeploymentError(Exception):
 
 class GenerationStateCorruptedError(Exception):
     """Raised when persisted generation state cannot be safely parsed."""
+
+    pass
+
+
+class AgentJobJournalCorruptedError(Exception):
+    """Raised when persisted job journal exists but cannot be safely parsed."""
 
     pass
 
@@ -61,6 +77,8 @@ class GenerationStateManager:
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError("Generation state must be a JSON dictionary")
             return GenerationState(
                 last_generation=int(data.get("last_generation", 0)),
                 last_deployment_id=data.get("last_deployment_id"),
@@ -113,10 +131,12 @@ class AgentJobJournal:
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 raw = json.load(f)
+            if not isinstance(raw, dict):
+                raise ValueError("Job journal must be a JSON dictionary")
             return {k: JournaledJob(**v) for k, v in raw.items()}
         except Exception as e:
             logger.error("Failed to load job journal from %s: %s", self.path, e)
-            return {}
+            raise AgentJobJournalCorruptedError(f"Corrupted job journal in {self.path}: {e}") from e
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,20 +197,37 @@ class DeploymentWorker:
         self.status_callback = status_callback
         self.current_ros_distro = current_ros_distro
 
-        self.gen_manager = GenerationStateManager(self.state_dir / "generation_state.json")
-        self.journal = AgentJobJournal(self.state_dir / "deployment_jobs.json")
+        self.recovery_required = False
+        try:
+            self.gen_manager = GenerationStateManager(self.state_dir / "generation_state.json")
+        except GenerationStateCorruptedError:
+            logger.critical("Generation state corrupted! Entering RECOVERY_REQUIRED mode.")
+            self.recovery_required = True
+            self.gen_manager = None
 
-        self._current_task: Optional[asyncio.Task] = None
+        try:
+            self.journal = AgentJobJournal(self.state_dir / "deployment_jobs.json")
+        except AgentJobJournalCorruptedError:
+            logger.critical("Job journal corrupted! Entering RECOVERY_REQUIRED mode.")
+            self.recovery_required = True
+            self.journal = None
+
+        self._active_tasks: Dict[str, asyncio.Task] = {}
+        self._active_deployment_id: Optional[str] = None
         self._current_instruction_id: Optional[str] = None
         self.device_lock = asyncio.Lock()
 
     def reconcile_on_startup(self) -> None:
         """Reconcile active/staged slots, journaled jobs, and generation state on agent restart."""
+        if self.recovery_required or not self.journal:
+            logger.warning("Agent in RECOVERY_REQUIRED mode; skipping standard startup reconciliation.")
+            return
+
         logger.info("Reconciling agent deployment state on startup for device %s...", self.device_id)
         active_slot = self.slot_manager.get_active_slot_id()
         logger.info("Current slot state: active=%s", active_slot)
 
-        for inst_id, job in self.journal.jobs.items():
+        for inst_id, job in list(self.journal.jobs.items()):
             if job.status in ("ACCEPTED", "EXECUTING"):
                 logger.warning("Found unfinalized job %s (type: %s) on restart. Reconciling...", inst_id, job.instruction_type)
                 if job.instruction_type == InstructionType.STAGE_RELEASE.value:
@@ -199,9 +236,28 @@ class DeploymentWorker:
                     if slot_meta and slot_meta.state == SlotState.VERIFIED and slot_meta.release_id == job.payload.get("release_id"):
                         logger.info("Reconciled job %s as STAGED in %s", inst_id, staged_id)
                         self.journal.update_job_status(inst_id, "COMPLETED", staged_slot=staged_id)
+                        asyncio.create_task(
+                            self._emit_status(
+                                instruction_id=inst_id,
+                                deployment_id=job.deployment_id,
+                                generation=job.generation,
+                                state=DeviceDeploymentState.STAGED,
+                                staged_slot=staged_id,
+                            )
+                        )
                     else:
                         logger.warning("Job %s was interrupted during staging; marking FAILED", inst_id)
                         self.journal.update_job_status(inst_id, "FAILED", error_message="Interrupted by daemon restart")
+                        asyncio.create_task(
+                            self._emit_status(
+                                instruction_id=inst_id,
+                                deployment_id=job.deployment_id,
+                                generation=job.generation,
+                                state=DeviceDeploymentState.FAILED,
+                                error_code="RESTART_INTERRUPTED",
+                                error_message="Interrupted by daemon restart during staging",
+                            )
+                        )
                 elif job.instruction_type == InstructionType.ACTIVATE_RELEASE.value:
                     target_slot = job.payload.get("slot") or job.payload.get("target_slot")
                     if target_slot and not target_slot.startswith("slot-"):
@@ -209,9 +265,28 @@ class DeploymentWorker:
                     if active_slot == target_slot:
                         logger.info("Reconciled job %s as ACTIVATED in %s", inst_id, target_slot)
                         self.journal.update_job_status(inst_id, "COMPLETED", active_slot=target_slot)
+                        asyncio.create_task(
+                            self._emit_status(
+                                instruction_id=inst_id,
+                                deployment_id=job.deployment_id,
+                                generation=job.generation,
+                                state=DeviceDeploymentState.ACTIVE,
+                                active_slot=target_slot,
+                            )
+                        )
                     else:
                         logger.warning("Job %s was interrupted during activation; marking FAILED", inst_id)
                         self.journal.update_job_status(inst_id, "FAILED", error_message="Interrupted by daemon restart")
+                        asyncio.create_task(
+                            self._emit_status(
+                                instruction_id=inst_id,
+                                deployment_id=job.deployment_id,
+                                generation=job.generation,
+                                state=DeviceDeploymentState.FAILED,
+                                error_code="RESTART_INTERRUPTED",
+                                error_message="Interrupted by daemon restart during activation",
+                            )
+                        )
 
     async def _emit_status(
         self,
@@ -225,7 +300,8 @@ class DeploymentWorker:
         error_message: Optional[str] = None,
     ) -> None:
         report = DeploymentStatusReport(
-            report_id=f"rep-{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+            protocol_version=CANONICAL_PROTOCOL_VERSION,
+            report_id=f"rep-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{instruction_id[-6:]}",
             instruction_id=instruction_id,
             deployment_id=deployment_id,
             device_id=self.device_id,
@@ -244,109 +320,267 @@ class DeploymentWorker:
             except Exception as e:
                 logger.error("Failed to emit status report via callback: %s", e)
 
-    async def report_status(
+    async def handle_instruction(
         self,
-        deployment_id: str,
-        generation: int,
-        state: DeviceDeploymentState,
-        staged_slot: Optional[str] = None,
-        active_slot: Optional[str] = None,
-        error_message: Optional[str] = None,
-    ) -> None:
-        inst_id = self._current_instruction_id or f"inst-legacy-{generation}"
-        await self._emit_status(
-            instruction_id=inst_id,
-            deployment_id=deployment_id,
-            generation=generation,
-            state=state,
-            staged_slot=staged_slot,
-            active_slot=active_slot,
-            error_message=error_message,
-        )
+        envelope: DeploymentInstructionEnvelope,
+    ) -> DeploymentAckEnvelope:
+        """
+        Validates deployment instruction strictly fail-closed, validates whole-instruction
+        idempotency and monotonic generations, persists durable job, and dispatches execution.
+        """
+        now = datetime.now(timezone.utc)
+        ack_timestamp = now.isoformat()
 
-    async def handle_instruction(self, envelope: DeploymentInstructionEnvelope) -> DeploymentAckEnvelope:
-        now_dt = datetime.now(timezone.utc)
-
-        # 1. Device identity validation
-        if envelope.device_id and envelope.device_id != "unknown" and envelope.device_id != self.device_id:
-            logger.error("Target device mismatch: envelope target=%s != local=%s", envelope.device_id, self.device_id)
+        if self.recovery_required:
             return DeploymentAckEnvelope(
-                ack_id=f"ack-{int(now_dt.timestamp() * 1000)}",
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
                 instruction_id=envelope.instruction_id,
                 deployment_id=envelope.deployment_id,
                 device_id=self.device_id,
                 generation=envelope.generation,
                 accepted=False,
-                error_code="TARGET_DEVICE_MISMATCH",
-                error_message=f"Target device mismatch: {envelope.device_id} != {self.device_id}",
-                timestamp=now_dt.isoformat(),
+                error_code="RECOVERY_REQUIRED",
+                error_message="Deployment subsystem requires manual recovery due to corrupted state files",
+                timestamp=ack_timestamp,
             )
 
-        # 2. Expiry check
+        # 1. Validate supported protocol version
+        if envelope.protocol_version not in SUPPORTED_PROTOCOL_VERSIONS and envelope.protocol_version != "1.0":
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="UNSUPPORTED_PROTOCOL_VERSION",
+                error_message=f"Unsupported protocol_version '{envelope.protocol_version}'. Supported: {SUPPORTED_PROTOCOL_VERSIONS}",
+                timestamp=ack_timestamp,
+            )
+
+        # 2. Validate required device_id and device binding
+        if not envelope.device_id or envelope.device_id.strip().lower() == "unknown":
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="MISSING_DEVICE_ID",
+                error_message="device_id is strictly required",
+                timestamp=ack_timestamp,
+            )
+
+        if envelope.device_id != self.device_id:
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="DEVICE_MISMATCH",
+                error_message=f"Instruction targeted device '{envelope.device_id}' but local identity is '{self.device_id}'",
+                timestamp=ack_timestamp,
+            )
+
+        # 3. Validate created_at
         try:
-            exp_dt = datetime.fromisoformat(envelope.expires_at)
-            if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-            if exp_dt <= now_dt:
+            created_dt = validate_iso8601_timestamp(envelope.created_at, "created_at")
+        except ValueError as e:
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="MALFORMED_CREATED_AT",
+                error_message=str(e),
+                timestamp=ack_timestamp,
+            )
+
+        # Clock skew check
+        if created_dt > now + timedelta(seconds=MAX_CLOCK_SKEW_SEC):
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="CLOCK_SKEW_EXCEEDED",
+                error_message=f"created_at '{envelope.created_at}' is too far in future (max skew {MAX_CLOCK_SKEW_SEC}s)",
+                timestamp=ack_timestamp,
+            )
+
+        # 4. Validate expires_at
+        try:
+            expires_dt = validate_iso8601_timestamp(envelope.expires_at, "expires_at")
+        except ValueError as e:
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="MALFORMED_EXPIRES_AT",
+                error_message=str(e),
+                timestamp=ack_timestamp,
+            )
+
+        if expires_dt <= created_dt:
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="INVALID_EXPIRY_ORDERING",
+                error_message=f"expires_at '{envelope.expires_at}' must be strictly greater than created_at '{envelope.created_at}'",
+                timestamp=ack_timestamp,
+            )
+
+        if expires_dt <= now:
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="INSTRUCTION_EXPIRED",
+                error_message=f"Instruction expired at {envelope.expires_at} (current time: {now.isoformat()})",
+                timestamp=ack_timestamp,
+            )
+
+        # 5. Parse and strictly validate typed payload (extra="forbid")
+        itype = envelope.instruction_type
+        try:
+            if itype == InstructionType.STAGE_RELEASE:
+                StageReleasePayload.model_validate(envelope.payload)
+            elif itype == InstructionType.ACTIVATE_RELEASE:
+                ActivateReleasePayload.model_validate(envelope.payload)
+            elif itype == InstructionType.CANCEL_DEPLOYMENT:
+                CancelDeploymentPayload.model_validate(envelope.payload)
+            elif itype == InstructionType.GET_DEPLOYMENT_STATUS:
+                GetDeploymentStatusPayload.model_validate(envelope.payload)
+            else:
                 return DeploymentAckEnvelope(
-                    ack_id=f"ack-{int(now_dt.timestamp() * 1000)}",
+                    protocol_version=CANONICAL_PROTOCOL_VERSION,
+                    ack_id=f"ack-{envelope.instruction_id}",
                     instruction_id=envelope.instruction_id,
                     deployment_id=envelope.deployment_id,
                     device_id=self.device_id,
                     generation=envelope.generation,
                     accepted=False,
-                    error_code="INSTRUCTION_EXPIRED",
-                    error_message="Instruction has expired",
-                    timestamp=now_dt.isoformat(),
+                    error_code="UNSUPPORTED_INSTRUCTION_TYPE",
+                    error_message=f"Unsupported instruction type '{itype}'",
+                    timestamp=ack_timestamp,
                 )
         except Exception as e:
-            logger.warning("Failed to parse expires_at timestamp: %s", e)
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="INVALID_PAYLOAD_SCHEMA",
+                error_message=f"Typed payload validation failed: {e}",
+                timestamp=ack_timestamp,
+            )
 
-        # 3. Monotonic Generation & Replay Binding
+        # 6. Verify canonical payload digest
+        canonical_payload = json.dumps(envelope.payload, sort_keys=True, separators=(",", ":"))
+        actual_payload_digest = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+        if actual_payload_digest.lower() != envelope.payload_digest.lower():
+            logger.error("Payload digest mismatch: computed %s, envelope has %s", actual_payload_digest, envelope.payload_digest)
+            return DeploymentAckEnvelope(
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
+                instruction_id=envelope.instruction_id,
+                deployment_id=envelope.deployment_id,
+                device_id=self.device_id,
+                generation=envelope.generation,
+                accepted=False,
+                error_code="PAYLOAD_DIGEST_MISMATCH",
+                error_message="Computed payload digest does not match envelope payload_digest",
+                timestamp=ack_timestamp,
+            )
+
+        # 7. Compute whole instruction canonical digest
         full_digest = canonical_instruction_digest(envelope)
+
+        # 8. Generation replay checks
         last_gen = self.gen_manager.state.last_generation
-        last_digest = self.gen_manager.state.last_instruction_digest
+        last_full_digest = self.gen_manager.state.last_instruction_digest
 
         if envelope.generation < last_gen:
+            logger.warning("Rejecting stale generation %d (current: %d)", envelope.generation, last_gen)
             return DeploymentAckEnvelope(
-                ack_id=f"ack-{int(now_dt.timestamp() * 1000)}",
+                protocol_version=CANONICAL_PROTOCOL_VERSION,
+                ack_id=f"ack-{envelope.instruction_id}",
                 instruction_id=envelope.instruction_id,
                 deployment_id=envelope.deployment_id,
                 device_id=self.device_id,
                 generation=envelope.generation,
                 accepted=False,
                 error_code="STALE_GENERATION",
-                error_message=f"Instruction generation {envelope.generation} is strictly less than current generation {last_gen}",
-                timestamp=now_dt.isoformat(),
+                error_message=f"Stale generation {envelope.generation} (current: {last_gen})",
+                timestamp=ack_timestamp,
             )
-        elif envelope.generation == last_gen:
-            if last_digest == full_digest or envelope.payload_digest == self.gen_manager.state.last_instruction_digest:
-                logger.info("Idempotent replay detected for generation %d", envelope.generation)
+
+        if envelope.generation == last_gen:
+            # Whole-instruction digest equality establishes idempotent replay
+            if last_full_digest == full_digest:
+                logger.info("Idempotent replay detected for instruction %s (gen: %d)", envelope.instruction_id, envelope.generation)
                 return DeploymentAckEnvelope(
-                    ack_id=f"ack-{int(now_dt.timestamp() * 1000)}",
+                    protocol_version=CANONICAL_PROTOCOL_VERSION,
+                    ack_id=f"ack-{envelope.instruction_id}",
                     instruction_id=envelope.instruction_id,
                     deployment_id=envelope.deployment_id,
                     device_id=self.device_id,
                     generation=envelope.generation,
                     accepted=True,
-                    error_code="IDEMPOTENT_REPLAY",
-                    error_message="Instruction already processed at this generation",
-                    timestamp=now_dt.isoformat(),
+                    error_code="REPLAY_IDEMPOTENT",
+                    error_message="Instruction previously accepted and recorded",
+                    timestamp=ack_timestamp,
                 )
             else:
+                logger.warning(
+                    "Replay conflict on generation %d: different instruction presented with same generation",
+                    envelope.generation,
+                )
                 return DeploymentAckEnvelope(
-                    ack_id=f"ack-{int(now_dt.timestamp() * 1000)}",
+                    protocol_version=CANONICAL_PROTOCOL_VERSION,
+                    ack_id=f"ack-{envelope.instruction_id}",
                     instruction_id=envelope.instruction_id,
                     deployment_id=envelope.deployment_id,
                     device_id=self.device_id,
                     generation=envelope.generation,
                     accepted=False,
                     error_code="REPLAY_CONFLICT",
-                    error_message=f"Generation {envelope.generation} already seen with a different instruction digest",
-                    timestamp=now_dt.isoformat(),
+                    error_message=f"Generation {envelope.generation} already executed with different instruction digest",
+                    timestamp=ack_timestamp,
                 )
 
-        # 4. Record journal and generation state BEFORE execution
+        # 9. All validation passed -> Record state and persist job
+        self.gen_manager.record_generation(envelope.generation, envelope.deployment_id, full_digest)
+
         job = JournaledJob(
             instruction_id=envelope.instruction_id,
             deployment_id=envelope.deployment_id,
@@ -355,29 +589,29 @@ class DeploymentWorker:
             payload=envelope.payload,
             full_instruction_digest=full_digest,
             status="ACCEPTED",
-            created_at=now_dt.isoformat(),
-            updated_at=now_dt.isoformat(),
+            created_at=now.isoformat(),
+            updated_at=now.isoformat(),
         )
         self.journal.record_job(job)
-        self.gen_manager.record_generation(envelope.generation, envelope.deployment_id, full_digest)
 
-        # 5. Schedule asynchronous execution task
+        # Dispatch asynchronous execution
+        self._active_deployment_id = envelope.deployment_id
         self._current_instruction_id = envelope.instruction_id
-        self._current_task = asyncio.create_task(self._execute_instruction(envelope))
+        task = asyncio.create_task(self._execute_instruction_task(envelope))
+        self._active_tasks[envelope.instruction_id] = task
 
         return DeploymentAckEnvelope(
-            ack_id=f"ack-{int(now_dt.timestamp() * 1000)}",
+            protocol_version=CANONICAL_PROTOCOL_VERSION,
+            ack_id=f"ack-{envelope.instruction_id}",
             instruction_id=envelope.instruction_id,
             deployment_id=envelope.deployment_id,
             device_id=self.device_id,
             generation=envelope.generation,
             accepted=True,
-            error_code="ACCEPTED",
-            error_message=None,
-            timestamp=now_dt.isoformat(),
+            timestamp=ack_timestamp,
         )
 
-    async def _execute_instruction(self, envelope: DeploymentInstructionEnvelope) -> None:
+    async def _execute_instruction_task(self, envelope: DeploymentInstructionEnvelope) -> None:
         async with self.device_lock:
             inst_id = envelope.instruction_id
             dep_id = envelope.deployment_id
@@ -423,6 +657,8 @@ class DeploymentWorker:
                 await self._emit_status(
                     inst_id, dep_id, gen, DeviceDeploymentState.FAILED, error_code="EXECUTION_ERROR", error_message=str(e)
                 )
+            finally:
+                self._active_tasks.pop(inst_id, None)
 
     async def _handle_stage_release(
         self,
@@ -444,6 +680,8 @@ class DeploymentWorker:
         base_url = source.base_url
         allowed_host = source.allowed_host
         allow_private = source.allow_private_network
+        max_bytes = source.max_artifact_bytes
+        ca_cert_path = source.ca_cert_path
 
         manifest_url = f"{base_url.rstrip('/')}/{release_id}/manifest.json"
         artifact_url = f"{base_url.rstrip('/')}/{release_id}/artifact.tar.gz"
@@ -455,6 +693,7 @@ class DeploymentWorker:
             expected_manifest_digest=expected_manifest_digest,
             allowed_host=allowed_host,
             allow_private_network=allow_private,
+            ca_cert_path=ca_cert_path,
         )
 
         # 2. Fetch signature
@@ -462,6 +701,7 @@ class DeploymentWorker:
             url=sig_url,
             allowed_host=allowed_host,
             allow_private_network=allow_private,
+            ca_cert_path=ca_cert_path,
         )
 
         # 3. Download artifact
@@ -471,6 +711,8 @@ class DeploymentWorker:
             deployment_id=deployment_id,
             allowed_host=allowed_host,
             allow_private_network=allow_private,
+            max_bytes=max_bytes,
+            ca_cert_path=ca_cert_path,
         )
 
         await self._emit_status(inst_id, deployment_id, generation, DeviceDeploymentState.VERIFYING)
@@ -549,13 +791,21 @@ class DeploymentWorker:
         payload: Dict[str, Any],
     ) -> None:
         inst_id = self._current_instruction_id or f"inst-{generation}"
+
+        # Cancel any active running staging task for this deployment
+        for active_inst_id, task in list(self._active_tasks.items()):
+            if active_inst_id != inst_id and not task.done():
+                logger.info("Cancelling in-flight task %s due to CANCEL_DEPLOYMENT", active_inst_id)
+                task.cancel()
+
         self.journal.update_job_status(inst_id, "COMPLETED")
+        active = self.slot_manager.get_active_slot_id()
         await self._emit_status(
             inst_id,
             deployment_id,
             generation,
             DeviceDeploymentState.CANCELLED,
-            current_slot=self.slot_manager.get_active_slot_id(),
+            active_slot=active,
         )
 
     async def _handle_get_status(
