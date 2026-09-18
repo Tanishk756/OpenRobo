@@ -1,158 +1,191 @@
-"""Unit tests for A/B Workspace Partitioning, Atomic Activation, and Mechanical Rollback."""
+"""Tests for ABSlotManager, crash consistency, rollback integrity, and trust store resolution."""
 
-from datetime import datetime, timezone
+import json
+from pathlib import Path
 
 import pytest
-from openrobo_agent.deployment import (
-    ABSlotManager,
-    SlotState,
-    activate_staged_slot,
-    rollback_to_previous,
-    stage_release_artifact,
-)
-from openrobo_release import (
-    ReleaseManifest,
-    ReleaseSigner,
+from openrobo_agent.deployment.activation import activate_staged_slot
+from openrobo_agent.deployment.models import SlotState
+from openrobo_agent.deployment.rollback import rollback_to_previous
+from openrobo_agent.deployment.slots import ABSlotManager
+from openrobo_agent.deployment.staging import stage_release_artifact
+from openrobo_release.archive import create_deterministic_archive
+from openrobo_release.models import (
+    KeyStatus,
     ReleaseTarget,
-    ReleaseVerifier,
-    create_deterministic_archive,
+    TrustedReleaseKey,
 )
+from openrobo_release.signing import ReleaseSigner, generate_development_keypair
+from openrobo_release.trust_store import TrustedReleaseKeyStore
 
 
 @pytest.fixture
-def test_release(tmp_path):
-    ws_dir = tmp_path / "sample_src_ws"
-    ws_dir.mkdir()
-    (ws_dir / "app.py").write_text("print('v1.0')", encoding="utf-8")
+def test_pki(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    key_meta, priv_bytes = generate_development_keypair(key_id="test-key-01")
 
-    archive_path = tmp_path / "rel_v1.tar.gz"
-    _, art_digest, ws_digest, files = create_deterministic_archive(ws_dir, archive_path)
+    trust_dir = tmp_path / "trusted_keys"
+    store = TrustedReleaseKeyStore(trust_dir=trust_dir)
+    store.add_key(
+        TrustedReleaseKey(
+            key_id="test-key-01",
+            public_key=key_meta.public_key_pem,
+            created_at="2026-09-18T00:00:00Z",
+            status=KeyStatus.ACTIVE,
+        )
+    )
+    return store, priv_bytes, "test-key-01"
 
-    manifest = ReleaseManifest(
-        release_id="rel-v1",
-        release_version="1.0.0",
-        created_at=datetime.now(timezone.utc).isoformat(),
-        workspace_digest=ws_digest,
-        artifact_digest=art_digest,
-        target=ReleaseTarget(operating_system="linux", architecture="x86_64"),
-        files=files,
-        release_key_id="test-key-id",
+
+def _build_release(ws_dir: Path, out_dir: Path, release_id: str, version: str, key_id: str, priv_bytes: bytes):
+    target = ReleaseTarget(operating_system="any", architecture="any")
+    art_path = out_dir / f"rel-{release_id}.tar.gz"
+    man_path = out_dir / f"rel-{release_id}.manifest.json"
+    sig_path = out_dir / f"rel-{release_id}.sig"
+
+    manifest, _ = create_deterministic_archive(
+        workspace_dir=ws_dir,
+        output_path=art_path,
+        target=target,
+        release_id=release_id,
+        release_version=version,
+        release_key_id=key_id,
     )
 
-    sign_key, trust_key = ReleaseSigner.generate_keypair(key_id=manifest.release_key_id)
-    signer = ReleaseSigner(private_key_pem=sign_key.private_key_pem, key_id=sign_key.key_id, allow_dev=True)
-    sig_b64 = signer.sign_manifest(manifest)
+    signer = ReleaseSigner(priv_bytes, key_id=key_id)
+    sig = signer.sign_manifest(manifest)
 
-    verifier = ReleaseVerifier(trusted_keys=[trust_key])
-
-    return archive_path, manifest, sig_b64, verifier, trust_key, signer
-
-
-def test_ab_slot_manager_initial_state(tmp_path):
-    """Prove that ABSlotManager initializes dual empty partitions."""
-    slot_mgr = ABSlotManager(tmp_path / "workspaces")
-    assert slot_mgr.get_active_slot() is None
-    assert slot_mgr.get_inactive_slot() == "slot-a"
-
-    meta_a = slot_mgr.get_slot_metadata("slot-a")
-    meta_b = slot_mgr.get_slot_metadata("slot-b")
-    assert meta_a.status == SlotState.EMPTY
-    assert meta_b.status == SlotState.EMPTY
+    man_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+    sig_path.write_text(sig, encoding="utf-8")
+    return art_path, man_path, sig_path
 
 
-def test_staging_and_activation_lifecycle(tmp_path, test_release):
-    """Prove full staging -> activation -> second staging -> activation -> rollback lifecycle."""
-    archive_path, manifest_v1, sig_v1, verifier, trust_key, signer = test_release
-    slot_mgr = ABSlotManager(tmp_path / "workspaces")
+def test_slot_initial_state(tmp_path):
+    manager = ABSlotManager(tmp_path / "deploy")
+    assert manager.get_active_slot_id() is None
+    assert manager.get_inactive_slot_id() == "slot-a"
+    assert manager.get_slot_metadata("slot-a").state == SlotState.EMPTY
+    assert manager.get_slot_metadata("slot-b").state == SlotState.EMPTY
 
-    # 1. Stage v1 into inactive slot (slot-a)
-    ok, msg, meta_v1 = stage_release_artifact(
-        slot_manager=slot_mgr,
-        archive_path=archive_path,
-        manifest=manifest_v1,
-        signature_b64=sig_v1,
-        verifier=verifier,
-        agent_capabilities={"operating_system": "linux", "architecture": "x86_64", "ros_distro": "humble"},
+
+def test_staging_and_verified_only_activation(tmp_path, test_pki):
+    store, priv_bytes, key_id = test_pki
+    ws = tmp_path / "ws1"
+    ws.mkdir()
+    (ws / "main.py").write_text("print('v1')", encoding="utf-8")
+
+    out_dir = tmp_path / "dist"
+    art_p, man_p, sig_p = _build_release(ws, out_dir, "rel-v1", "1.0.0", key_id, priv_bytes)
+
+    manager = ABSlotManager(tmp_path / "deploy")
+
+    # Staging
+    ok, msg = stage_release_artifact(manager, art_p, man_p, sig_p, store)
+    assert ok is True, msg
+    assert manager.get_slot_metadata("slot-a").state == SlotState.VERIFIED
+
+    # Activation requires VERIFIED (un-verified slot cannot be activated)
+    ok_act, msg_act = activate_staged_slot(manager, slot_id="slot-b")
+    assert ok_act is False
+    assert "cannot be activated" in msg_act
+
+    # Activate slot-a
+    ok_act_a, msg_act_a = activate_staged_slot(manager, slot_id="slot-a")
+    assert ok_act_a is True, msg_act_a
+    assert manager.get_active_slot_id() == "slot-a"
+    assert manager.get_slot_metadata("slot-a").state == SlotState.ACTIVE
+
+
+def test_crash_intent_journal_startup_reconciliation(tmp_path):
+    dep_root = tmp_path / "deploy_crash"
+    dep_root.mkdir()
+
+    # Create an interrupted activation journal where pointer was switched to slot-b
+    (dep_root / "current.ptr").write_text("slot-b", encoding="utf-8")
+    journal_file = dep_root / "activation.intent.json"
+    journal_file.write_text(
+        json.dumps({
+            "transaction_id": "tx-123",
+            "from_slot": "slot-a",
+            "to_slot": "slot-b",
+            "release_id": "rel-002",
+            "state": "SWITCHED",
+            "created_at": "2026-09-18T00:00:00Z",
+        }),
+        encoding="utf-8",
     )
-    assert ok is True
-    assert meta_v1.status == SlotState.STAGED
-    assert meta_v1.slot_id == "slot-a"
-    assert (slot_mgr.slot_paths["slot-a"] / "app.py").exists()
 
-    # 2. Activate slot-a
-    ok, msg, act_v1 = activate_staged_slot(slot_mgr, target_slot_id="slot-a")
-    assert ok is True
-    assert act_v1.status == SlotState.ACTIVE
-    assert slot_mgr.get_active_slot() == "slot-a"
-    assert slot_mgr.get_inactive_slot() == "slot-b"
-
-    # 3. Create release v2
-    ws_v2 = tmp_path / "ws_v2"
-    ws_v2.mkdir()
-    (ws_v2 / "app.py").write_text("print('v2.0')", encoding="utf-8")
-    archive_v2 = tmp_path / "rel_v2.tar.gz"
-    _, art_digest_v2, ws_digest_v2, files_v2 = create_deterministic_archive(ws_v2, archive_v2)
-
-    manifest_v2 = ReleaseManifest(
-        release_id="rel-v2",
-        release_version="2.0.0",
-        created_at=datetime.now(timezone.utc).isoformat(),
-        workspace_digest=ws_digest_v2,
-        artifact_digest=art_digest_v2,
-        target=ReleaseTarget(operating_system="linux", architecture="x86_64"),
-        files=files_v2,
-        release_key_id="test-key-id",
-    )
-    sig_v2 = signer.sign_manifest(manifest_v2)
-
-    # 4. Stage v2 into inactive slot (slot-b)
-    ok, msg, meta_v2 = stage_release_artifact(
-        slot_manager=slot_mgr,
-        archive_path=archive_v2,
-        manifest=manifest_v2,
-        signature_b64=sig_v2,
-        verifier=verifier,
-        agent_capabilities={"operating_system": "linux", "architecture": "x86_64", "ros_distro": "humble"},
-    )
-    assert ok is True
-    assert meta_v2.slot_id == "slot-b"
-    assert meta_v2.status == SlotState.STAGED
-
-    # Confirm slot-a is still ACTIVE and undisturbed
-    assert slot_mgr.get_slot_metadata("slot-a").status == SlotState.ACTIVE
-    assert (slot_mgr.slot_paths["slot-a"] / "app.py").read_text(encoding="utf-8") == "print('v1.0')"
-
-    # 5. Activate v2 (slot-b)
-    ok, msg, act_v2 = activate_staged_slot(slot_mgr, target_slot_id="slot-b")
-    assert ok is True
-    assert act_v2.status == SlotState.ACTIVE
-    assert slot_mgr.get_active_slot() == "slot-b"
-
-    # Confirm slot-a transitioned to PREVIOUS without deletion
-    meta_a_prev = slot_mgr.get_slot_metadata("slot-a")
-    assert meta_a_prev.status == SlotState.PREVIOUS
-    assert (slot_mgr.slot_paths["slot-a"] / "app.py").exists()
-
-    # 6. Execute Rollback to previous slot (slot-a)
-    ok, msg, restored_meta = rollback_to_previous(slot_mgr)
-    assert ok is True
-    assert restored_meta.slot_id == "slot-a"
-    assert restored_meta.status == SlotState.ACTIVE
-    assert slot_mgr.get_active_slot() == "slot-a"
-
-    # Confirm slot-b marked FAILED
-    assert slot_mgr.get_slot_metadata("slot-b").status == SlotState.FAILED
+    manager = ABSlotManager(dep_root)
+    assert manager.get_active_slot_id() == "slot-b"
+    assert manager.get_slot_metadata("slot-b").state == SlotState.ACTIVE
+    assert manager.get_slot_metadata("slot-a").state == SlotState.PREVIOUS
+    assert not journal_file.exists()
 
 
-def test_active_slot_protected_from_overwrite(tmp_path, test_release):
-    """Prove that attempting to stage directly into the active slot raises an error."""
-    archive_path, manifest, sig, verifier, _, _ = test_release
-    slot_mgr = ABSlotManager(tmp_path / "workspaces")
+def test_rollback_rejects_tampered_candidate(tmp_path, test_pki):
+    store, priv_bytes, key_id = test_pki
+    manager = ABSlotManager(tmp_path / "deploy_tamper")
 
-    # Manually activate slot-a
-    meta_a = slot_mgr.get_slot_metadata("slot-a")
-    meta_a.status = SlotState.ACTIVE
-    slot_mgr.update_slot_metadata(meta_a)
+    # Stage & activate v1
+    ws1 = tmp_path / "ws1"
+    ws1.mkdir()
+    (ws1 / "main.py").write_text("print('v1')", encoding="utf-8")
+    art1, man1, sig1 = _build_release(ws1, tmp_path / "dist1", "rel-1", "1.0.0", key_id, priv_bytes)
+    ok1, m1 = stage_release_artifact(manager, art1, man1, sig1, store)
+    assert ok1 is True, m1
+    ok_act1, ma1 = activate_staged_slot(manager, "slot-a")
+    assert ok_act1 is True, ma1
 
-    with pytest.raises(RuntimeError, match="Active slot is protected"):
-        slot_mgr.prepare_staging_slot("slot-a")
+    # Stage & activate v2
+    ws2 = tmp_path / "ws2"
+    ws2.mkdir()
+    (ws2 / "main.py").write_text("print('v2')", encoding="utf-8")
+    art2, man2, sig2 = _build_release(ws2, tmp_path / "dist2", "rel-2", "2.0.0", key_id, priv_bytes)
+    ok2, m2 = stage_release_artifact(manager, art2, man2, sig2, store)
+    assert ok2 is True, m2
+    ok_act2, ma2 = activate_staged_slot(manager, "slot-b")
+    assert ok_act2 is True, ma2
+
+    # Tamper with slot-a content
+    (manager.get_slot_dir("slot-a") / "main.py").write_text("print('tampered')", encoding="utf-8")
+
+    # Rollback must be rejected
+    ok_rb, msg_rb = rollback_to_previous(manager, store)
+    assert ok_rb is False
+    assert "tampered" in msg_rb.lower() or "mismatch" in msg_rb.lower()
+    assert manager.get_active_slot_id() == "slot-b"
+    assert manager.get_slot_metadata("slot-a").state == SlotState.QUARANTINED
+
+
+def test_rollback_rejects_revoked_key(tmp_path, test_pki):
+    store, priv_bytes, key_id = test_pki
+    manager = ABSlotManager(tmp_path / "deploy_revoked")
+
+    # Stage & activate v1
+    ws1 = tmp_path / "ws1"
+    ws1.mkdir()
+    (ws1 / "main.py").write_text("print('v1')", encoding="utf-8")
+    art1, man1, sig1 = _build_release(ws1, tmp_path / "dist1", "rel-1", "1.0.0", key_id, priv_bytes)
+    ok1, m1 = stage_release_artifact(manager, art1, man1, sig1, store)
+    assert ok1 is True, m1
+    ok_act1, ma1 = activate_staged_slot(manager, "slot-a")
+    assert ok_act1 is True, ma1
+
+    # Stage & activate v2
+    ws2 = tmp_path / "ws2"
+    ws2.mkdir()
+    (ws2 / "main.py").write_text("print('v2')", encoding="utf-8")
+    art2, man2, sig2 = _build_release(ws2, tmp_path / "dist2", "rel-2", "2.0.0", key_id, priv_bytes)
+    ok2, m2 = stage_release_artifact(manager, art2, man2, sig2, store)
+    assert ok2 is True, m2
+    ok_act2, ma2 = activate_staged_slot(manager, "slot-b")
+    assert ok_act2 is True, ma2
+
+    # Revoke signing key in store
+    store.revoke_key(key_id)
+
+    # Rollback must be blocked
+    ok_rb, msg_rb = rollback_to_previous(manager, store)
+    assert ok_rb is False
+    assert "revoked" in msg_rb.lower()
+    assert manager.get_active_slot_id() == "slot-b"
