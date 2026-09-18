@@ -1,4 +1,4 @@
-"""Secure, traversal-resistant artifact extractor with quarantine isolation and post-extraction verification."""
+"""Safe release archive extraction with traversal resistance, link rejection, and quarantine staging."""
 
 import hashlib
 import os
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from openrobo_release.models import ReleaseManifest
 
-# Reserved Windows device names
+# Windows reserved device names
 WINDOWS_RESERVED_NAMES = {
     "CON", "PRN", "AUX", "NUL",
     "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
@@ -20,67 +20,68 @@ WINDOWS_RESERVED_NAMES = {
 
 
 def sanitize_and_validate_path(
-    rel_path: str,
-    seen_canonical_paths: set[str],
+    path_str: str,
+    seen_canonical_paths: set[str] | None = None,
     max_path_length: int = 255,
 ) -> str:
-    """Validates and canonicalizes an archive member path, rejecting traversals, control chars, reserved names, and duplicate collisions."""
-    if not rel_path:
-        raise ValueError("Archive entry has empty path.")
+    """Sanitizes an archive member path, enforcing traversal prevention and duplicate alias rejection.
 
-    # Reject NUL and ASCII control characters (< 32)
-    for c in rel_path:
-        if ord(c) < 32:
-            raise ValueError(f"Archive entry path contains forbidden control character (ASCII {ord(c)}): {rel_path!r}")
+    Returns the canonical normalized relative path.
+    """
+    if "\x00" in path_str:
+        raise ValueError(f"Path contains illegal null byte: {repr(path_str)}")
+
+    # Reject non-printable ASCII control characters
+    for c in path_str:
+        if ord(c) < 32 and c not in ("\t", "\n", "\r"):
+            raise ValueError(f"Path contains illegal ASCII control character: {repr(path_str)}")
+
+    # Normalize Unicode to NFC
+    nfc_str = unicodedata.normalize("NFC", path_str)
+
+    # Reject Windows drive letters and UNC paths
+    if re.match(r"^[a-zA-Z]:", nfc_str) or nfc_str.startswith(("\\\\", "//")):
+        raise ValueError(f"Absolute Windows drive/UNC path forbidden: {path_str}")
 
     # Normalize backslashes to forward slashes
-    norm_path = rel_path.replace("\\", "/")
+    normalized = nfc_str.replace("\\", "/")
 
-    # Reject leading slashes (absolute POSIX paths)
-    if norm_path.startswith("/"):
-        raise ValueError(f"Archive entry has forbidden absolute path: {rel_path}")
+    if normalized.startswith("/"):
+        raise ValueError(f"absolute path forbidden: {path_str}")
 
-    # Reject Windows drive letters (e.g. C:, D:)
-    if re.match(r"^[a-zA-Z]:", norm_path):
-        raise ValueError(f"Archive entry has forbidden Windows drive letter path: {rel_path}")
+    parts = normalized.split("/")
+    cleaned_parts: list[str] = []
 
-    # Reject UNC paths (// or \\)
-    if norm_path.startswith("//") or rel_path.startswith(r"\\"):
-        raise ValueError(f"Archive entry has forbidden UNC path: {rel_path}")
-
-    # Canonicalize path components (resolving . and redundant slashes)
-    parts = norm_path.split("/")
-    clean_parts: list[str] = []
     for part in parts:
+        part = part.strip()
         if not part or part == ".":
             continue
         if part == "..":
-            raise ValueError(f"Archive entry contains path traversal sequence ('..'): {rel_path}")
+            raise ValueError(f"path traversal / directory traversal ('..') detected in path: {path_str}")
 
-        # Check Windows reserved device names (e.g. CON, PRN, AUX, NUL, COM1, LPT1)
+        # Check for Windows reserved device names (e.g. CON, NUL, COM1, AUX.txt)
         base_name = part.split(".")[0].upper()
         if base_name in WINDOWS_RESERVED_NAMES:
-            raise ValueError(f"Archive entry contains Windows reserved device name '{part}': {rel_path}")
+            raise ValueError(f"Windows reserved device name forbidden in archive member: {part}")
 
-        clean_parts.append(part)
+        cleaned_parts.append(part)
 
-    if not clean_parts:
-        raise ValueError(f"Archive entry resolves to empty path: {rel_path}")
+    if not cleaned_parts:
+        raise ValueError(f"Path resolves to empty/root target: {path_str}")
 
-    canonical_str = "/".join(clean_parts)
-    if len(canonical_str) > max_path_length:
-        raise ValueError(f"Archive entry path exceeds maximum length ({len(canonical_str)} > {max_path_length}): {rel_path}")
+    canonical_rel_path = "/".join(cleaned_parts)
 
-    # Unicode normalization (NFC)
-    nfc_str = unicodedata.normalize("NFC", canonical_str)
+    if len(canonical_rel_path) > max_path_length:
+        raise ValueError(f"Path length ({len(canonical_rel_path)}) exceeds maximum permitted ({max_path_length})")
 
-    # Check for duplicate / alias collisions (case-folded)
-    lookup_key = nfc_str.lower()
-    if lookup_key in seen_canonical_paths:
-        raise ValueError(f"Archive contains duplicate or colliding path alias: {rel_path} (canonical: {nfc_str})")
+    # Duplicate alias detection using case-folded path for universal portable safety
+    if seen_canonical_paths is not None:
+        lookup_key = canonical_rel_path.casefold()
+        if lookup_key in seen_canonical_paths:
+            raise ValueError(f"Canonical path collision / colliding path alias detected for archive member: {canonical_rel_path}")
+        seen_canonical_paths.add(lookup_key)
 
-    seen_canonical_paths.add(lookup_key)
-    return nfc_str
+    return canonical_rel_path
 
 
 class SafeArtifactExtractor:
@@ -90,14 +91,16 @@ class SafeArtifactExtractor:
         self,
         allow_symlinks: bool = False,
         allow_hardlinks: bool = False,
+        max_archive_bytes: int = 100 * 1024 * 1024,  # 100 MB compressed
         max_expansion_ratio: float = 50.0,
         max_files: int = 10000,
-        max_total_bytes: int = 100 * 1024 * 1024,  # 100 MB
-        max_file_size: int = 50 * 1024 * 1024,     # 50 MB
+        max_total_bytes: int = 200 * 1024 * 1024,   # 200 MB extracted
+        max_file_size: int = 50 * 1024 * 1024,      # 50 MB single file
         max_path_length: int = 255,
     ) -> None:
         self.allow_symlinks = allow_symlinks
         self.allow_hardlinks = allow_hardlinks
+        self.max_archive_bytes = max_archive_bytes
         self.max_expansion_ratio = max_expansion_ratio
         self.max_files = max_files
         self.max_total_bytes = max_total_bytes
@@ -120,6 +123,9 @@ class SafeArtifactExtractor:
         if archive_size == 0:
             raise ValueError("Release archive is empty (0 bytes).")
 
+        if archive_size > self.max_archive_bytes:
+            raise ValueError(f"Archive compressed size ({archive_size} bytes) exceeds limit ({self.max_archive_bytes} bytes).")
+
         # Create isolated quarantine directory
         quarantine_p = dest_p.parent / f"{dest_p.name}.incoming.{uuid.uuid4().hex[:8]}"
         quarantine_p.mkdir(parents=True, exist_ok=False)
@@ -128,6 +134,7 @@ class SafeArtifactExtractor:
             total_bytes = 0
             file_count = 0
             seen_canonical: set[str] = set()
+            member_canonical_map: dict[tarfile.TarInfo, str] = {}
 
             with tarfile.open(arch_p, mode="r:*") as tar:
                 members = tar.getmembers()
@@ -137,16 +144,16 @@ class SafeArtifactExtractor:
 
                 # Pre-scan and validate all members
                 for member in members:
-                    sanitize_and_validate_path(
+                    canonical_path = sanitize_and_validate_path(
                         member.name,
                         seen_canonical_paths=seen_canonical,
                         max_path_length=self.max_path_length,
                     )
+                    member_canonical_map[member] = canonical_path
 
                     if member.issym():
                         if not self.allow_symlinks:
                             raise ValueError(f"Archive contains forbidden symbolic link: {member.name}")
-                        # If allowed, check target
                         link_target = member.linkname
                         if ".." in link_target or link_target.startswith("/") or re.match(r"^[a-zA-Z]:", link_target):
                             raise ValueError(f"Symbolic link escapes extraction target: {member.name} -> {link_target}")
@@ -180,13 +187,13 @@ class SafeArtifactExtractor:
                         f"Decompression expansion ratio ({expansion_ratio:.1f}x) exceeds limit ({self.max_expansion_ratio:.1f}x)."
                     )
 
-                # Extract validated members member-by-member
+                # Extract validated members member-by-member using canonical destinations
                 for member in members:
-                    member_name = member.name.replace("\\", "/")
-                    dest_file_path = (quarantine_p / member_name).resolve()
+                    canonical_rel = member_canonical_map[member]
+                    dest_file_path = (quarantine_p / canonical_rel).resolve()
 
-                    # Confirm destination remains inside quarantine root
-                    if not str(dest_file_path).startswith(str(quarantine_p)):
+                    # Confirm destination remains inside quarantine root using path-aware containment
+                    if not dest_file_path.is_relative_to(quarantine_p):
                         raise ValueError(f"Extraction path escapes quarantine root: {dest_file_path}")
 
                     if member.isdir():
