@@ -48,6 +48,7 @@ def _create_and_sign_release(
 
 def test_full_local_ota_lifecycle(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENROBO_DEV_RELEASE_SIGNING", "true")
+    monkeypatch.setenv("ROS_DISTRO", "humble")
 
     # 1. Setup Trust Store with Dev Release Key
     signing_key, priv_bytes = generate_development_keypair(key_id="rel-authority-1")
