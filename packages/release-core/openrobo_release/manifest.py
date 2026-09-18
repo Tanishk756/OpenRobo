@@ -2,9 +2,13 @@
 
 import hashlib
 import json
+import os
+from pathlib import Path
 from typing import List, Union
 
 from openrobo_release.models import FileEntry, ReleaseManifest
+
+IGNORE_NAMES = (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache", "build", "install", "log")
 
 
 def canonical_manifest_bytes(manifest: Union[ReleaseManifest, dict]) -> bytes:
@@ -44,9 +48,29 @@ def compute_manifest_digest(manifest: Union[ReleaseManifest, dict, bytes]) -> st
 
 
 def compute_workspace_digest(files: List[FileEntry]) -> str:
-    """
-    Compute deterministic SHA-256 tree digest across an ordered list of workspace files.
-    """
+    """Compute deterministic SHA-256 tree digest across an ordered list of workspace files."""
     sorted_files = sorted(files, key=lambda f: f.path)
     combined = "\n".join(f"{f.sha256}  {f.path}" for f in sorted_files)
+    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+
+
+def calculate_workspace_digest(workspace_dir_or_files: Union[Path, str, List[FileEntry]]) -> str:
+    """Calculates workspace tree digest from directory path or list of FileEntries."""
+    if isinstance(workspace_dir_or_files, list):
+        return compute_workspace_digest(workspace_dir_or_files)
+
+    ws_path = Path(workspace_dir_or_files).resolve()
+    file_hashes: list[tuple[str, str]] = []
+    for root, _, files in os.walk(ws_path):
+        for f in sorted(files):
+            full_path = Path(root) / f
+            rel_path = os.path.relpath(full_path, ws_path).replace("\\", "/")
+            if any(p in rel_path.split("/") for p in IGNORE_NAMES):
+                continue
+            with open(full_path, "rb") as fp:
+                h = hashlib.sha256(fp.read()).hexdigest()
+            file_hashes.append((rel_path, h))
+
+    file_hashes.sort(key=lambda x: x[0])
+    combined = "\n".join(f"{h}  {p}" for p, h in file_hashes)
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()

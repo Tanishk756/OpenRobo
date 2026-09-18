@@ -1,151 +1,173 @@
-"""Release packaging, signing, and verification CLI commands for OpenRobo."""
+"""Release management CLI commands for building, inspecting, signing, and verifying immutable OpenRobo releases."""
 
-import json
-from datetime import datetime, timezone
+import os
 from pathlib import Path
-from typing import Optional
 
 import typer
-from openrobo_release import (
-    ReleaseManifest,
+from openrobo_release.archive import create_deterministic_archive
+from openrobo_release.models import ReleaseTarget
+from openrobo_release.signing import (
     ReleaseSigner,
-    ReleaseTarget,
-    ReleaseVerifier,
-    TrustedReleaseKey,
-    canonical_manifest_bytes,
-    create_deterministic_archive,
+    generate_development_keypair,
+    validate_private_key_file,
 )
+from openrobo_release.trust_store import TrustedReleaseKeyStore
+from openrobo_release.verification import ReleaseVerifier
 from rich.console import Console
-from rich.panel import Panel
 
+release_app = typer.Typer(help="Manage and build OpenRobo signed release artifacts.", no_args_is_help=True)
+key_app = typer.Typer(help="Manage release signing keys.", no_args_is_help=True)
+release_app.add_typer(key_app, name="key")
 console = Console()
-release_app = typer.Typer(name="release", help="Cryptographic release artifact packaging, signing, and verification.")
+
+
+@key_app.command("generate")
+def generate_key(
+    dev: bool = typer.Option(False, "--dev", help="Explicitly declare that this is a development signing key."),
+    output_dir: str = typer.Option("./keys", "--output-dir", "-o", help="Directory to save generated key files."),
+    key_id: str = typer.Option(None, "--key-id", help="Optional explicit key ID."),
+) -> None:
+    """Generates a development Ed25519 signing keypair when OPENROBO_DEV_RELEASE_SIGNING=true."""
+    if not dev:
+        console.print("[bold red]Error: Automatic production key generation is disabled. Use --dev for development keys.[/bold red]")
+        raise typer.Exit(code=1)
+
+    try:
+        signing_key, priv_bytes = generate_development_keypair(key_id=key_id)
+    except PermissionError as pe:
+        console.print(f"[bold red]Permission Error:[/bold red] {pe}")
+        raise typer.Exit(code=1)
+
+    out_path = Path(output_dir).resolve()
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    priv_file = out_path / f"{signing_key.key_id}.key"
+    pub_file = out_path / f"{signing_key.key_id}.pub.json"
+
+    with open(priv_file, "wb") as f:
+        f.write(priv_bytes)
+    with open(pub_file, "w", encoding="utf-8") as f:
+        f.write(signing_key.model_dump_json(indent=2))
+
+    console.print(f"[bold green]Development signing keypair generated:[/bold green] {signing_key.key_id}")
+    console.print(f"  Private Key: {priv_file}")
+    console.print(f"  Public Key Metadata: {pub_file}")
 
 
 @release_app.command("build")
 def build_release(
-    workspace_dir: Path = typer.Argument(..., help="Path to workspace directory to package"),
-    output_dir: Path = typer.Option(Path("dist"), "--output-dir", "-o", help="Output directory for release artifacts"),
-    release_id: str = typer.Option(..., "--release-id", "-r", help="Unique release identifier"),
-    version: str = typer.Option("1.0.0", "--version", "-v", help="Semver release version"),
-    key_id: str = typer.Option("rel-dev-key-01", "--key-id", "-k", help="Release key ID"),
-    private_key_file: Optional[Path] = typer.Option(None, "--private-key", help="Path to Ed25519 private key PEM file"),
-    target_os: str = typer.Option("linux", "--target-os", help="Target operating system"),
-    target_arch: str = typer.Option("x86_64", "--target-arch", help="Target CPU architecture"),
-    ros_distro: str = typer.Option("humble", "--ros-distro", help="Target ROS 2 distro"),
-):
-    """Package a workspace directory into an immutable signed release artifact."""
-    if not workspace_dir.exists() or not workspace_dir.is_dir():
-        console.print(f"[bold red]Error:[/bold red] Workspace directory not found: {workspace_dir}")
+    workspace_dir: str = typer.Argument(..., help="Path to the workspace root to package."),
+    output_dir: str = typer.Option("./dist", "--output-dir", "-o", help="Output directory for release artifacts."),
+    release_id: str = typer.Option(None, "--release-id", help="Explicit release UUID."),
+    release_version: str = typer.Option("1.0.0", "--version", "-v", help="Semantic release version."),
+    os_target: str = typer.Option("linux", "--os", help="Target operating system."),
+    arch_target: str = typer.Option("x86_64", "--arch", help="Target CPU architecture."),
+    ros_distro: str = typer.Option("humble", "--ros-distro", help="Target ROS distribution."),
+    private_key: str = typer.Option(None, "--private-key", "-k", help="Path to Ed25519 private key file (PEM format)."),
+    key_id: str = typer.Option(None, "--key-id", help="Signing Key ID."),
+) -> None:
+    """Packages a workspace into a deterministic .tar.gz archive, generates manifest, and cryptographically signs it."""
+    ws_path = Path(workspace_dir).resolve()
+    if not ws_path.exists():
+        console.print(f"[bold red]Error: Workspace directory does not exist:[/bold red] {ws_path}")
         raise typer.Exit(code=1)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    archive_path = output_dir / f"{release_id}.tar.gz"
-    manifest_path = output_dir / f"{release_id}.manifest.json"
-    sig_path = output_dir / f"{release_id}.sig"
+    # 1. Resolve & Validate Private Key
+    priv_key_path = private_key or os.environ.get("OPENROBO_RELEASE_PRIVATE_KEY")
+    if not priv_key_path:
+        console.print(
+            "[bold red]Error: Production release build requires an explicit signing key "
+            "(--private-key or OPENROBO_RELEASE_PRIVATE_KEY).[/bold red]\n"
+            "Automatic development signing is disabled in production."
+        )
+        raise typer.Exit(code=1)
 
-    console.print(f"[cyan]Creating deterministic archive for release '{release_id}'...[/cyan]")
-    archive_out, art_digest, ws_digest, files = create_deterministic_archive(workspace_dir, archive_path)
+    try:
+        validate_private_key_file(priv_key_path)
+    except Exception as e:
+        console.print(f"[bold red]Private Key Validation Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    manifest = ReleaseManifest(
-        release_id=release_id,
-        release_version=version,
-        created_at=now_iso,
-        workspace_digest=ws_digest,
-        artifact_digest=art_digest,
-        target=ReleaseTarget(operating_system=target_os, architecture=target_arch, ros_distro=ros_distro),
-        files=files,
-        release_key_id=key_id,
+    with open(priv_key_path, "rb") as f:
+        priv_key_bytes = f.read()
+
+    actual_key_id = key_id or Path(priv_key_path).stem
+    actual_release_id = release_id or f"rel-{os.urandom(6).hex()}"
+
+    target = ReleaseTarget(
+        operating_system=os_target,
+        architecture=arch_target,
+        ros_distro=ros_distro,
     )
 
-    # Sign manifest
-    if private_key_file and private_key_file.exists():
-        priv_pem = private_key_file.read_text(encoding="utf-8")
-        signer = ReleaseSigner(private_key_pem=priv_pem, key_id=key_id)
-        sig_b64 = signer.sign_manifest(manifest)
-    else:
-        # Generate development signing key
-        console.print("[yellow]Notice: No private key provided. Generating development signing keypair...[/yellow]")
-        sign_key, trust_key = ReleaseSigner.generate_keypair(key_id=key_id)
-        signer = ReleaseSigner(private_key_pem=sign_key.private_key_pem, key_id=key_id, allow_dev=True)
-        sig_b64 = signer.sign_manifest(manifest)
+    out_path = Path(output_dir).resolve()
+    out_path.mkdir(parents=True, exist_ok=True)
 
-        # Save public key for verification
-        pub_path = output_dir / f"{key_id}.pub.pem"
-        pub_path.write_text(trust_key.public_key_pem, encoding="utf-8")
-        console.print(f"Saved public key to [cyan]{pub_path}[/cyan]")
+    artifact_filename = f"openrobo-{actual_release_id}.tar.gz"
+    artifact_path = out_path / artifact_filename
+    manifest_path = out_path / f"openrobo-{actual_release_id}.manifest.json"
+    sig_path = out_path / f"openrobo-{actual_release_id}.sig"
 
-    # Save manifest and signature
-    manifest_bytes = canonical_manifest_bytes(manifest)
-    manifest_path.write_bytes(manifest_bytes)
-    sig_path.write_text(sig_b64, encoding="utf-8")
+    # 2. Package Archive
+    try:
+        manifest, report = create_deterministic_archive(
+            workspace_dir=ws_path,
+            output_path=artifact_path,
+            target=target,
+            release_id=actual_release_id,
+            release_version=release_version,
+            release_key_id=actual_key_id,
+        )
+    except Exception as e:
+        console.print(f"[bold red]Packaging Error:[/bold red] {e}")
+        raise typer.Exit(code=1)
 
-    console.print(Panel(
-        f"[bold green]Release Package Built Successfully[/bold green]\n\n"
-        f"Release ID:       {release_id} (v{version})\n"
-        f"Artifact Digest:  {art_digest[:16]}...\n"
-        f"Workspace Digest: {ws_digest[:16]}...\n"
-        f"Files Packaged:   {len(files)}\n"
-        f"Archive:          {archive_path}\n"
-        f"Manifest:         {manifest_path}\n"
-        f"Signature:        {sig_path}",
-        title="Release Build Summary",
-    ))
+    # 3. Sign Manifest
+    signer = ReleaseSigner(priv_key_bytes, key_id=actual_key_id)
+    detached_sig = signer.sign_manifest(manifest)
+
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        f.write(manifest.model_dump_json(indent=2))
+    with open(sig_path, "w", encoding="utf-8") as f:
+        f.write(detached_sig)
+
+    console.print("[bold green]Release built and signed successfully![/bold green]")
+    console.print(f"  Release ID: {actual_release_id}")
+    console.print(f"  Artifact:   {artifact_path}")
+    console.print(f"  Manifest:   {manifest_path}")
+    console.print(f"  Signature:  {sig_path}")
+    console.print(f"  Files:      {len(report.included_files)} included, {len(report.excluded_files)} excluded")
 
 
 @release_app.command("verify")
 def verify_release(
-    manifest_path: Path = typer.Argument(..., help="Path to release manifest JSON"),
-    signature_path: Path = typer.Argument(..., help="Path to detached base64 .sig file"),
-    public_key_path: Path = typer.Option(..., "--public-key", "-p", help="Path to trusted Ed25519 public key PEM"),
-    artifact_path: Optional[Path] = typer.Option(None, "--artifact", "-a", help="Optional path to artifact archive for digest check"),
-):
-    """Cryptographically verify a release manifest, detached signature, and artifact digest."""
-    if not manifest_path.exists():
-        console.print(f"[bold red]Error:[/bold red] Manifest not found: {manifest_path}")
-        raise typer.Exit(code=1)
-    if not signature_path.exists():
-        console.print(f"[bold red]Error:[/bold red] Signature not found: {signature_path}")
-        raise typer.Exit(code=1)
-    if not public_key_path.exists():
-        console.print(f"[bold red]Error:[/bold red] Public key not found: {public_key_path}")
+    manifest_file: str = typer.Argument(..., help="Path to release manifest JSON."),
+    signature_file: str = typer.Argument(..., help="Path to detached signature file."),
+    trust_dir: str = typer.Option(None, "--trust-dir", help="Path to trusted release keys directory."),
+) -> None:
+    """Verifies a release manifest against trusted release keys."""
+    m_path = Path(manifest_file).resolve()
+    s_path = Path(signature_file).resolve()
+
+    if not m_path.exists() or not s_path.exists():
+        console.print("[bold red]Manifest or signature file does not exist.[/bold red]")
         raise typer.Exit(code=1)
 
-    try:
-        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest = ReleaseManifest(**manifest_data)
-    except Exception as e:
-        console.print(f"[bold red]Malformed Manifest:[/bold red] {e}")
-        raise typer.Exit(code=1)
+    import json
 
-    sig_b64 = signature_path.read_text(encoding="utf-8").strip()
-    pub_pem = public_key_path.read_text(encoding="utf-8")
+    from openrobo_release.models import ReleaseManifest
 
-    trusted_key = TrustedReleaseKey(
-        key_id=manifest.release_key_id,
-        algorithm="Ed25519",
-        public_key_pem=pub_pem,
-        created_at=datetime.now(timezone.utc).isoformat(),
-    )
-    verifier = ReleaseVerifier(trusted_keys=[trusted_key])
-    result = verifier.verify_release(manifest=manifest, signature_b64=sig_b64, artifact_path=artifact_path)
+    with open(m_path, "r", encoding="utf-8") as f:
+        manifest = ReleaseManifest.model_validate(json.load(f))
+    with open(s_path, "r", encoding="utf-8") as f:
+        sig = f.read().strip()
 
-    if result.is_valid:
-        console.print(Panel(
-            f"[bold green]VERIFICATION SUCCESSFUL[/bold green]\n\n"
-            f"Release ID:       {manifest.release_id}\n"
-            f"Key ID:           {manifest.release_key_id}\n"
-            f"Manifest Digest:  {result.manifest_digest}\n"
-            f"Artifact Digest:  {result.artifact_digest or 'N/A'}\n"
-            f"Status:           {result.status.value}",
-            title="Verification Result",
-        ))
+    store = TrustedReleaseKeyStore(trust_dir=trust_dir)
+    verifier = ReleaseVerifier(trust_store=store)
+
+    res = verifier.verify_manifest_signature(manifest, sig)
+    if res.is_valid:
+        console.print(f"[bold green]Signature VALID for release {manifest.release_id} (Key: {res.key_id})[/bold green]")
     else:
-        console.print(Panel(
-            f"[bold red]VERIFICATION FAILED[/bold red]\n\n"
-            f"Status:  {result.status.value}\n"
-            f"Message: {result.message}",
-            title="Verification Error",
-        ))
+        console.print(f"[bold red]Signature INVALID: {res.details} ({res.status.value})[/bold red]")
         raise typer.Exit(code=1)
