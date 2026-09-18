@@ -98,3 +98,32 @@ All 15 readiness criteria for M7.2.2 are fully satisfied:
 13. M7.2.2 implementation plan is clean Markdown with deterministic canary stages.
 14. PR-only discipline strictly followed.
 15. Full test suite and CI green.
+---
+
+## 5. README & Repository Integrity Audit
+
+A comprehensive encoding, character integrity, and technical accuracy audit was performed across `README.md` and all tracked repository documentation.
+
+### 5.1 README Encoding & Character Cleanup
+- **Encoding Status**: Verified valid UTF-8 before and after cleanup.
+- **Malformed Sequences Found**:
+  - Double-encoded em dashes in stack descriptions (`stackâ€...` / `Ã¢â‚¬â€”`).
+  - Corrupted evidence arrow in safety section (`NO EVIDENCE â†’ NO INVENTED CONFIGURATION`).
+  - Corrupted directory tree box-drawing symbols in Architecture section (`Ã¢â€ Å“Ã¢â€ â‚¬Ã¢â€ â‚¬`, `Ã¢â€ â€š`, `Ã¢â€ â€ `).
+- **Corrections Applied**:
+  - Restored clean Unicode em dashes (`—`), arrows (`→`), and box-drawing lines (`├──`, `│`, `└──`).
+  - Added newly created packages (`packages/release-core/`, `packages/agent-core/`) to Architecture tree.
+  - Updated Quickstart virtual environment setup to install `-e packages/release-core -e packages/agent-core`.
+  - Added Milestone 7.1 and 7.2.1 capability bullets without claiming unimplemented M7.2.2 features.
+
+### 5.2 Repository-Wide Mojibake & Control Character Scan
+- **Mojibake Check**: Scanned all tracked `.py`, `.md`, `.json`, `.yaml`, `.yml`, `.ts`, `.tsx`, `.css`, `.html`, `.toml`, `.sh`, `.ps1` files. All legacy double-encoded sequences across historic milestone reports (`docs/M2_VERIFICATION_REPORT.md`, `docs/M5_HARDENING_REPORT.md`, `docs/M6_VERIFICATION_REPORT.md`, `docs/IMPLEMENTATION_LEDGER.md`) were repaired. Final mojibake count: **0**.
+- **Control Character Scan**: Scanned all tracked files for ASCII control bytes (< 0x20) excluding `	`, `
+`, `
+`. Final unexpected control character count: **0**.
+
+### 5.3 Markdown Structure & Technical Path Verification
+- **Structure**: Exactly one H1 (`# OpenRobo`), balanced code fences, clean table structures, no broken links or escaped HTML tags.
+- **Technical Path Alignment**: All documented paths (`packages/release-core`, `packages/agent-core`, `packages/runtime-core`, `packages/workspace-gen`, `packages/compat-engine`, `packages/schemas`, `packages/cli`, `apps/api`, `apps/web`) match current repository layout.
+- **Toolchain Alignment**: Toolchain versions in `README.md` match `pyproject.toml`, `package.json`, and `.github/workflows/ci.yml` (Python 3.10-3.12, Node 24, pnpm 12.4.2).
+- **Remaining Issues**: **None**.

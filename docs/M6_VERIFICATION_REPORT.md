@@ -4,7 +4,7 @@
 **Project:** OpenRobo
 **Owner / Maintainer:** Tanishk Singhal
 **Date:** September 17, 2026
-**Status:** COMPLETED & VERIFIED Ã¢Å“â€¦
+**Status:** COMPLETED & VERIFIED ✅
 
 ---
 
@@ -13,7 +13,7 @@
 Milestone 6 marks the critical transition for OpenRobo from static artifact generation to active execution and runtime intelligence:
 
 ```
-STATICALLY_VALIDATED (M5.1) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº BUILD_VERIFIED (M6.1) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº RUNTIME_VERIFIED (M6.2)
+STATICALLY_VALIDATED (M5.1) ──► BUILD_VERIFIED (M6.1) ──► RUNTIME_VERIFIED (M6.2)
 ```
 
 Guided by strict evidence integrity, OpenRobo now provides:
@@ -31,30 +31,31 @@ Guided by strict evidence integrity, OpenRobo now provides:
 ### Package: `packages/runtime-core` (`openrobo-runtime` v0.6.0)
 
 ```
-packages/runtime-core/openrobo_runtime/
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ models.py                  # Pydantic v2 domain models for execution, graph & QoS
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ executor.py                # Controlled BuildRunner with security constraints
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ session.py                 # RuntimeSessionManager with process lifecycle tracking
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ providers/
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ base.py                # Abstract ExecutionProvider base class
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ docker.py              # Containerized Docker execution provider
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ podman.py              # Rootless Podman execution provider
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ local_process.py       # Host process runner with argument isolation
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ detector.py            # Automatic provider availability discovery
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ introspection/
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ qos.py                 # ROS 2 QoS policy compatibility evaluation matrix
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ graph.py               # Computational graph node and topic inspector
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ comparator.py          # Planned stack manifest vs observed graph comparator
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ tf.py                  # Minimal transform frame connectivity inspector
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ integrations/
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ connection_inspector.py# Safe external process adapter for Connection Inspector
-Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ simulators/
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ base.py                # Unified SimulationAdapter interface
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ gazebo.py              # Gazebo Harmonic/Fortress simulation adapter
-Ã¢â€â€š   Ã¢â€Å“Ã¢â€â‚¬Ã¢â€â‚¬ webots.py              # Webots simulation adapter
-Ã¢â€â€š   Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ mujoco.py              # MuJoCo physics simulation adapter
-Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ telemetry/
-    Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ rosbag.py              # Rosbag2 SQLite3 metadata & message count inspector
+openrobo_runtime/
+├── models.py                  # Pydantic v2 domain models for execution, graph & QoS
+├── executor.py                # Controlled BuildRunner with security constraints
+├── session.py                 # RuntimeSessionManager with process lifecycle tracking
+├── providers/
+│   ├── base.py                # Abstract ExecutionProvider base class
+│   ├── docker.py              # Containerized Docker execution provider
+│   ├── podman.py              # Rootless Podman execution provider
+│   ├── local_process.py       # Host process runner with argument isolation
+│   └── detector.py            # Automatic provider availability discovery
+├── introspection/
+│   ├── qos.py                 # ROS 2 QoS policy compatibility evaluation matrix
+│   ├── graph.py               # Computational graph node and topic inspector
+│   ├── comparator.py          # Planned stack manifest vs observed graph comparator
+│   └── tf.py                  # Minimal transform frame connectivity inspector
+├── integrations/
+│   └── connection_inspector.py# Safe external process adapter for Connection Inspector
+├── simulators/
+│   ├── base.py                # Unified SimulationAdapter interface
+│   ├── gazebo.py              # Gazebo Harmonic/Fortress simulation adapter
+│   ├── webots.py              # Webots simulation adapter
+│   └── mujoco.py              # MuJoCo physics simulation adapter
+└── telemetry/
+    └── rosbag.py              # Rosbag2 SQLite3 metadata & message count inspector
+```
 ```
 
 ---
@@ -102,11 +103,11 @@ packages/runtime-core/openrobo_runtime/
 
 | Subsystem | Local Environment Status | Result Recorded |
 |---|---|---|
-| **Docker Build Execution** | Docker Desktop daemon offline on Windows host | `NOT EXECUTED Ã¢â‚¬â€ Docker daemon unavailable` |
-| **Colcon Host Build** | ROS 2 colcon not installed in Windows development host | `NOT EXECUTED Ã¢â‚¬â€ Local colcon unavailable` |
-| **Live ROS Graph Introspection** | Host ROS 2 daemon offline | `NOT EXECUTED Ã¢â‚¬â€ Live ROS 2 runtime unavailable` |
-| **Gazebo Simulator Runtime** | `gz sim` executable not found in host PATH | `NOT EXECUTED Ã¢â‚¬â€ Gazebo CLI unavailable` |
-| **Connection Inspector Tool** | `ros2 pkg prefix connection_inspector` not found | `NOT EXECUTED Ã¢â‚¬â€ connection_inspector unavailable locally` |
+| **Docker Build Execution** | Docker Desktop daemon offline on Windows host | `NOT EXECUTED — Docker daemon unavailable` |
+| **Colcon Host Build** | ROS 2 colcon not installed in Windows development host | `NOT EXECUTED — Local colcon unavailable` |
+| **Live ROS Graph Introspection** | Host ROS 2 daemon offline | `NOT EXECUTED — Live ROS 2 runtime unavailable` |
+| **Gazebo Simulator Runtime** | `gz sim` executable not found in host PATH | `NOT EXECUTED — Gazebo CLI unavailable` |
+| **Connection Inspector Tool** | `ros2 pkg prefix connection_inspector` not found | `NOT EXECUTED — connection_inspector unavailable locally` |
 ---
 
 ## 6. Milestone 6.1 Truthful Readiness & Live Wiring Update

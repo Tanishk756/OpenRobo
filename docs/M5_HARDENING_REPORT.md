@@ -4,7 +4,7 @@
 **Project:** OpenRobo
 **Owner / Maintainer:** Tanishk Singhal
 **Date:** September 17, 2026
-**Status:** COMPLETED & VERIFIED Ã¢Å“â€¦
+**Status:** COMPLETED & VERIFIED ✅
 
 ---
 
@@ -12,7 +12,7 @@
 
 Milestone 5.1 is a focused, rigorous trust and safety hardening pass on the OpenRobo Workspace Generator (`packages/workspace-gen`). Guided by the foundational principle:
 
-> **NO EVIDENCE Ã¢â€ â€™ NO INVENTED CONFIGURATION**
+> **NO EVIDENCE → NO INVENTED CONFIGURATION**
 
 The generator now deterministically differentiates:
 1. **`VERIFIED_ADAPTER`**: Canonical, tested adapters (Nav2, SLAM Toolbox, ros2_control, Gazebo) registered with exact canonical IDs.
@@ -88,7 +88,7 @@ The generator now deterministically differentiates:
 ## 4. Real Build Verification Status
 
 - **Docker Version Check**: Docker CLI v29.7.2 present; Docker Desktop daemon offline on host.
-- **Recorded Status**: `NOT EXECUTED Ã¢â‚¬â€ Docker daemon unavailable`.
+- **Recorded Status**: `NOT EXECUTED — Docker daemon unavailable`.
 
 ---
 
