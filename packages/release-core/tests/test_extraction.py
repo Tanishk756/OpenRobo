@@ -154,3 +154,24 @@ def test_quarantine_cleanup_on_failure(tmp_path, valid_manifest):
     incoming_dirs = list(tmp_path.glob("staging_target.incoming.*"))
     assert len(incoming_dirs) == 0
     assert not dest.exists()
+
+
+def test_max_archive_bytes_enforcement(tmp_path, valid_manifest):
+    arch_bytes = _make_archive({"src/app.py": b"small"})
+    tar_file = tmp_path / "small.tar.gz"
+    tar_file.write_bytes(arch_bytes)
+
+    # Set limit smaller than archive size
+    extractor = SafeArtifactExtractor(max_archive_bytes=10)
+    with pytest.raises(ValueError, match="Archive compressed size"):
+        extractor.extract_and_verify(tar_file, tmp_path / "dest", valid_manifest)
+
+
+def test_portable_case_collision_rejection(tmp_path, valid_manifest):
+    arch_bytes = _make_archive({"src/file.txt": b"1", "src/FILE.TXT": b"2"})
+    tar_file = tmp_path / "case.tar.gz"
+    tar_file.write_bytes(arch_bytes)
+
+    extractor = SafeArtifactExtractor()
+    with pytest.raises(ValueError, match="colliding path alias"):
+        extractor.extract_and_verify(tar_file, tmp_path / "dest", valid_manifest)

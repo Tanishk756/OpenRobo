@@ -3,7 +3,9 @@
 import hashlib
 import json
 import os
+import stat
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from openrobo_release.models import (
@@ -61,15 +63,15 @@ def rollback_to_previous(
         manager.update_slot_metadata(prev_slot_id, state=SlotState.FAILED)
         return False, f"Rollback blocked: failed to parse stored release evidence: {e}"
 
-    # 2. Check Key Revocation in Trust Store
+    # 2. Check Key Status & Revocation in Trust Store
     trusted_key = trust_store.get_trusted_key(manifest.release_key_id)
     if not trusted_key:
         manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
         return False, f"Rollback blocked: signing key '{manifest.release_key_id}' is no longer in the trusted release key store."
 
-    if trusted_key.status == KeyStatus.REVOKED:
+    if trusted_key.status != KeyStatus.ACTIVE or trusted_key.revoked_at is not None:
         manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
-        return False, f"Rollback blocked: signing key '{manifest.release_key_id}' for previous release has been revoked."
+        return False, f"Rollback blocked: signing key '{manifest.release_key_id}' is not ACTIVE (revoked or expired)."
 
     # 3. Cryptographic Signature Re-verification
     verifier = ReleaseVerifier(trust_store=trust_store)
@@ -78,11 +80,43 @@ def rollback_to_previous(
         manager.update_slot_metadata(prev_slot_id, state=SlotState.FAILED)
         return False, f"Rollback blocked: signature verification of previous manifest failed: {sig_res.details}"
 
-    # 4. Full File-by-File Hash Re-verification of Previous Slot Directory
-    manifest_map = {f.path.replace("\\", "/"): f.sha256 for f in manifest.files}
+    # 4. Strict File Set & Type Validation of Previous Slot Directory (Phases 18 & 19)
+    manifest_map = {Path(f.path).as_posix(): f.sha256 for f in manifest.files}
+    manifest_files_set = set(manifest_map.keys())
+
+    disk_files_set: set[str] = set()
+    for root, dirs, files in os.walk(prev_slot_dir, followlinks=False):
+        root_path = Path(root)
+
+        for d in dirs:
+            dir_full = root_path / d
+            if dir_full.is_symlink():
+                manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+                return False, f"Rollback blocked: unexpected symlink directory found in payload: {dir_full}"
+
+        for file_name in files:
+            file_full = root_path / file_name
+            rel_path = file_full.relative_to(prev_slot_dir).as_posix()
+
+            if file_full.is_symlink() or os.path.islink(file_full):
+                manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+                return False, f"Rollback blocked: unexpected symlink found in payload: {rel_path}"
+
+            st = file_full.lstat()
+            if not stat.S_ISREG(st.st_mode):
+                manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+                return False, f"Rollback blocked: non-regular file found in payload: {rel_path}"
+
+            disk_files_set.add(rel_path)
+
+    extra_files = disk_files_set - manifest_files_set
+    if extra_files:
+        manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
+        return False, f"Rollback blocked: slot contains unexpected unlisted files: {sorted(list(extra_files))}"
+
     for rel_path, expected_sha in manifest_map.items():
         file_path = prev_slot_dir / rel_path
-        if not file_path.exists():
+        if not file_path.exists() or rel_path not in disk_files_set:
             manager.update_slot_metadata(prev_slot_id, state=SlotState.QUARANTINED)
             return False, f"Rollback blocked: previous slot is corrupted; missing file '{rel_path}'."
         with open(file_path, "rb") as fp:
@@ -98,7 +132,7 @@ def rollback_to_previous(
         if not safe:
             return False, f"Rollback blocked by safety policy: {reason}"
 
-    # 6. Execute Crash-Consistent Pointer Switch
+    # 6. Execute Crash-Consistent Pointer Switch with fsync
     now_str = datetime.now(timezone.utc).isoformat()
     journal_file = manager.intent_journal_file
     temp_journal = manager.deployment_root / f"activation.intent.json.tmp.{os.getpid()}"
@@ -114,6 +148,8 @@ def rollback_to_previous(
 
     with open(temp_journal, "w", encoding="utf-8") as f:
         f.write(intent.model_dump_json(indent=2))
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(temp_journal, journal_file)
 
     current_link = manager.current_link
@@ -122,6 +158,8 @@ def rollback_to_previous(
     if manager.is_windows:
         with open(manager.current_ptr_file, "w", encoding="utf-8") as f:
             f.write(prev_slot_id)
+            f.flush()
+            os.fsync(f.fileno())
     else:
         if current_next.exists() or current_next.is_symlink():
             current_next.unlink()

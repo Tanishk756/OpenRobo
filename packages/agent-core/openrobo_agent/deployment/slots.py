@@ -42,8 +42,11 @@ class ABSlotManager:
                 with open(self.metadata_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 return SlotsState.model_validate(data)
-            except Exception:
-                pass
+            except Exception as e:
+                raise RuntimeError(
+                    f"Deployment metadata file '{self.metadata_file}' is corrupted: {e}. "
+                    "Refusing to silently reset to empty state; manual recovery required."
+                ) from e
 
         return SlotsState(
             active_slot=None,
@@ -57,6 +60,8 @@ class ABSlotManager:
         temp_file = self.deployment_root / f"slots.json.tmp.{os.getpid()}"
         with open(temp_file, "w", encoding="utf-8") as f:
             f.write(self.state.model_dump_json(indent=2))
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(temp_file, self.metadata_file)
 
     def _read_filesystem_pointer(self) -> str | None:
@@ -72,8 +77,7 @@ class ABSlotManager:
 
         if self.current_ptr_file.exists():
             try:
-                with open(self.current_ptr_file, "r", encoding="utf-8") as f:
-                    content = f.read().strip()
+                content = self.current_ptr_file.read_text(encoding="utf-8").strip()
                 if content in ("slot-a", "slot-b"):
                     return content
             except Exception:
@@ -82,37 +86,39 @@ class ABSlotManager:
         return None
 
     def _reconcile_startup_state(self) -> None:
-        """Reconciles interrupted activation transactions and ensures metadata matches the authoritative pointer."""
-        # 1. Check activation transaction journal
+        """Reconciles interrupted transactions and synchronizes active pointers after agent reboot."""
+        # 1. Resolve in-flight activation journal if present
         if self.intent_journal_file.exists():
             try:
                 with open(self.intent_journal_file, "r", encoding="utf-8") as f:
-                    intent_data = json.load(f)
-                intent = ActivationIntent.model_validate(intent_data)
+                    data = json.load(f)
+                intent = ActivationIntent.model_validate(data)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Activation journal '{self.intent_journal_file}' is corrupted: {e}. "
+                    "Refusing to silently ignore transaction journal; recovery required."
+                ) from e
 
-                # Check pointer position
-                ptr_slot = self._read_filesystem_pointer()
-                if ptr_slot == intent.to_slot:
-                    # Switch happened on disk; complete the metadata transition
-                    self.state.active_slot = intent.to_slot
-                    if intent.from_slot and intent.from_slot in self.state.slots:
-                        self.state.slots[intent.from_slot].state = SlotState.PREVIOUS
-                    if intent.to_slot in self.state.slots:
-                        self.state.slots[intent.to_slot].state = SlotState.ACTIVE
-                    self._save_state()
-                elif intent.from_slot and ptr_slot == intent.from_slot:
-                    # Switch did not happen; restore from_slot as ACTIVE, to_slot as VERIFIED/FAILED
-                    self.state.active_slot = intent.from_slot
-                    if intent.from_slot in self.state.slots:
-                        self.state.slots[intent.from_slot].state = SlotState.ACTIVE
-                    if intent.to_slot in self.state.slots and self.state.slots[intent.to_slot].state == SlotState.ACTIVE:
-                        self.state.slots[intent.to_slot].state = SlotState.VERIFIED
-                    self._save_state()
+            ptr_slot = self._read_filesystem_pointer()
+            if intent.to_slot and ptr_slot == intent.to_slot:
+                # Pointer switched; complete activation to to_slot
+                self.state.active_slot = intent.to_slot
+                if intent.from_slot and intent.from_slot in self.state.slots:
+                    self.state.slots[intent.from_slot].state = SlotState.PREVIOUS
+                if intent.to_slot in self.state.slots:
+                    self.state.slots[intent.to_slot].state = SlotState.ACTIVE
+                self._save_state()
+            elif intent.from_slot and ptr_slot == intent.from_slot:
+                # Switch did not happen; restore from_slot as ACTIVE, to_slot as VERIFIED/FAILED
+                self.state.active_slot = intent.from_slot
+                if intent.from_slot in self.state.slots:
+                    self.state.slots[intent.from_slot].state = SlotState.ACTIVE
+                if intent.to_slot in self.state.slots and self.state.slots[intent.to_slot].state == SlotState.ACTIVE:
+                    self.state.slots[intent.to_slot].state = SlotState.VERIFIED
+                self._save_state()
 
-                # Clean up resolved journal
-                self.intent_journal_file.unlink(missing_ok=True)
-            except Exception:
-                pass
+            # Clean up resolved journal
+            self.intent_journal_file.unlink(missing_ok=True)
 
         # 2. Reconcile metadata with authoritative filesystem pointer
         fs_active = self._read_filesystem_pointer()

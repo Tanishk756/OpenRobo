@@ -1,4 +1,4 @@
-"""Cryptographic and integrity verification of OpenRobo release manifests and artifacts."""
+﻿"""Verification engine for cryptographic release manifests, signatures, and target compatibility."""
 
 import base64
 import hashlib
@@ -18,18 +18,35 @@ from openrobo_release.models import (
 )
 from openrobo_release.trust_store import TrustedReleaseKeyStore
 
+ARCH_ALIASES = {
+    "x86_64": "x86_64",
+    "amd64": "x86_64",
+    "x64": "x86_64",
+    "aarch64": "aarch64",
+    "arm64": "aarch64",
+}
+
+
+def _normalize_arch(arch: str) -> str:
+    cleaned = arch.lower().strip()
+    return ARCH_ALIASES.get(cleaned, cleaned)
+
 
 def _parse_iso_datetime(dt_str: str) -> datetime | None:
+    """Parses an ISO 8601 datetime string and ensures it is timezone-aware."""
+    if not dt_str or not isinstance(dt_str, str):
+        return None
     try:
-        if dt_str.endswith("Z"):
-            dt_str = dt_str[:-1] + "+00:00"
-        return datetime.fromisoformat(dt_str)
+        dt = datetime.fromisoformat(dt_str)
+        if dt.tzinfo is None:
+            return None  # Naive timestamps fail closed
+        return dt
     except Exception:
         return None
 
 
 class ReleaseVerifier:
-    """Verifies cryptographic signatures, digests, and target compatibility of release manifests."""
+    """Verifies digital signatures, digests, and target constraints for OpenRobo releases."""
 
     def __init__(
         self,
@@ -37,37 +54,39 @@ class ReleaseVerifier:
         trusted_keys: list[TrustedReleaseKey] | None = None,
     ) -> None:
         self.trust_store = trust_store
-        self._trusted_keys: dict[str, TrustedReleaseKey] = {}
+        self.trusted_keys: dict[str, TrustedReleaseKey] = {k.key_id: k for k in trusted_keys} if trusted_keys else {}
 
-        if trusted_keys:
-            for k in trusted_keys:
-                self._trusted_keys[k.key_id] = k
+    def _resolve_trusted_key(self, key_id: str) -> tuple[TrustedReleaseKey | None, str | None]:
+        if key_id in self.trusted_keys:
+            return self.trusted_keys[key_id], None
 
-    def get_trusted_key(self, key_id: str) -> TrustedReleaseKey | None:
-        if key_id in self._trusted_keys:
-            return self._trusted_keys[key_id]
-        if self.trust_store:
-            return self.trust_store.get_trusted_key(key_id)
-        return None
+        if not self.trust_store:
+            return None, "No trust store configured."
 
-    def verify_manifest_signature(self, manifest: ReleaseManifest, detached_signature_b64: str) -> ReleaseVerificationResult:
-        """Verifies the Ed25519 detached signature of a manifest against trusted keys with strict fail-closed metadata checks."""
+        key = self.trust_store.get_trusted_key(key_id)
+        if not key:
+            return None, f"Key ID '{key_id}' not found in trusted release key store."
+
+        return key, None
+
+    def verify_manifest_signature(
+        self,
+        manifest: ReleaseManifest,
+        detached_signature_b64: str,
+        trusted_key: TrustedReleaseKey | None = None,
+    ) -> ReleaseVerificationResult:
+        """Verifies an Ed25519 detached signature against a trusted release public key."""
         key_id = manifest.release_key_id
-        trusted_key = self.get_trusted_key(key_id)
+
+        # Resolve trusted key if not explicitly passed
+        if not trusted_key:
+            trusted_key, err = self._resolve_trusted_key(key_id)
+
         if not trusted_key:
             return ReleaseVerificationResult(
                 status=VerificationStatus.UNTRUSTED_SIGNING_KEY,
                 is_valid=False,
                 details=f"Release key ID '{key_id}' is not in the trusted release key store.",
-                release_id=manifest.release_id,
-                key_id=key_id,
-            )
-
-        if trusted_key.status == KeyStatus.REVOKED:
-            return ReleaseVerificationResult(
-                status=VerificationStatus.REVOKED_SIGNING_KEY,
-                is_valid=False,
-                details=f"Release key '{key_id}' has been revoked at {trusted_key.revoked_at}.",
                 release_id=manifest.release_id,
                 key_id=key_id,
             )
@@ -78,20 +97,56 @@ class ReleaseVerifier:
                 return ReleaseVerificationResult(
                     status=VerificationStatus.KEY_METADATA_INVALID,
                     is_valid=False,
-                    details=f"Release key '{key_id}' has unparseable created_at timestamp: {trusted_key.created_at}",
+                    details=f"Release key '{key_id}' has invalid/naive created_at timestamp: {trusted_key.created_at}",
                     release_id=manifest.release_id,
                     key_id=key_id,
                 )
 
         if trusted_key.revoked_at:
-            if _parse_iso_datetime(trusted_key.revoked_at) is None:
+            rev_dt = _parse_iso_datetime(trusted_key.revoked_at)
+            if rev_dt is None:
                 return ReleaseVerificationResult(
                     status=VerificationStatus.KEY_METADATA_INVALID,
                     is_valid=False,
-                    details=f"Release key '{key_id}' has unparseable revoked_at timestamp: {trusted_key.revoked_at}",
+                    details=f"Release key '{key_id}' has invalid/naive revoked_at timestamp: {trusted_key.revoked_at}",
                     release_id=manifest.release_id,
                     key_id=key_id,
                 )
+            # If revoked_at is present, key is revoked regardless of status field
+            return ReleaseVerificationResult(
+                status=VerificationStatus.REVOKED_SIGNING_KEY,
+                is_valid=False,
+                details=f"Release key '{key_id}' has been revoked at {trusted_key.revoked_at}.",
+                release_id=manifest.release_id,
+                key_id=key_id,
+            )
+
+        if trusted_key.status == KeyStatus.REVOKED:
+            return ReleaseVerificationResult(
+                status=VerificationStatus.REVOKED_SIGNING_KEY,
+                is_valid=False,
+                details=f"Release key '{key_id}' is marked as REVOKED.",
+                release_id=manifest.release_id,
+                key_id=key_id,
+            )
+
+        if trusted_key.status == KeyStatus.EXPIRED:
+            return ReleaseVerificationResult(
+                status=VerificationStatus.EXPIRED_SIGNING_KEY,
+                is_valid=False,
+                details=f"Release key '{key_id}' is marked as EXPIRED.",
+                release_id=manifest.release_id,
+                key_id=key_id,
+            )
+
+        if trusted_key.status != KeyStatus.ACTIVE:
+            return ReleaseVerificationResult(
+                status=VerificationStatus.UNTRUSTED_SIGNING_KEY,
+                is_valid=False,
+                details=f"Release key '{key_id}' has non-active status '{trusted_key.status}'.",
+                release_id=manifest.release_id,
+                key_id=key_id,
+            )
 
         if trusted_key.expires_at:
             exp_dt = _parse_iso_datetime(trusted_key.expires_at)
@@ -99,7 +154,7 @@ class ReleaseVerifier:
                 return ReleaseVerificationResult(
                     status=VerificationStatus.KEY_METADATA_INVALID,
                     is_valid=False,
-                    details=f"Release key '{key_id}' has unparseable expires_at timestamp: {trusted_key.expires_at}",
+                    details=f"Release key '{key_id}' has invalid/naive expires_at timestamp: {trusted_key.expires_at}",
                     release_id=manifest.release_id,
                     key_id=key_id,
                 )
@@ -195,7 +250,7 @@ class ReleaseVerifier:
     ) -> ReleaseVerificationResult:
         """Verifies target OS, architecture, and ROS distribution compatibility."""
         os_name = (current_os or platform.system()).lower()
-        arch_name = (current_arch or platform.machine()).lower()
+        arch_name = _normalize_arch(current_arch or platform.machine())
 
         target = manifest.target
         if target.operating_system.lower() not in (os_name, "any", "all"):
@@ -206,19 +261,23 @@ class ReleaseVerifier:
                 release_id=manifest.release_id,
             )
 
-        target_arch = target.architecture.lower()
+        target_arch = _normalize_arch(target.architecture)
         if target_arch not in (arch_name, "any", "all"):
-            # Handle x86_64 / amd64 aliases
-            x86_aliases = ("x86_64", "amd64")
-            if not (target_arch in x86_aliases and arch_name in x86_aliases):
+            return ReleaseVerificationResult(
+                status=VerificationStatus.TARGET_INCOMPATIBLE,
+                is_valid=False,
+                details=f"Target architecture mismatch: release requires {target.architecture}, host is {arch_name}",
+                release_id=manifest.release_id,
+            )
+
+        if target.ros_distro and target.ros_distro.lower() not in ("any", "all", "none", ""):
+            if not current_ros_distro:
                 return ReleaseVerificationResult(
-                    status=VerificationStatus.TARGET_INCOMPATIBLE,
+                    status=VerificationStatus.TARGET_ENVIRONMENT_UNKNOWN,
                     is_valid=False,
-                    details=f"Target architecture mismatch: release requires {target.architecture}, host is {arch_name}",
+                    details=f"Target requires ROS distro '{target.ros_distro}', but host ROS environment is unknown.",
                     release_id=manifest.release_id,
                 )
-
-        if target.ros_distro and current_ros_distro:
             if target.ros_distro.lower() != current_ros_distro.lower():
                 return ReleaseVerificationResult(
                     status=VerificationStatus.TARGET_INCOMPATIBLE,
