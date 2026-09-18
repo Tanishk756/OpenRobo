@@ -3,6 +3,7 @@
 import hashlib
 import json
 import math
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,7 +22,7 @@ from openrobo_release.deployment_protocol import (
     validate_deployment_transition,
     validate_device_transition,
 )
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.models import (
@@ -31,6 +32,7 @@ from apps.api.models import (
     DeploymentEventModel,
     DeploymentInstructionModel,
     DeploymentModel,
+    DeviceDeploymentLeaseModel,
     DeviceDeploymentModel,
     FleetDeviceModel,
     ReleaseArtifactModel,
@@ -48,10 +50,48 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def normalize_arch(arch: Optional[str]) -> Optional[str]:
+    """Normalize architecture aliases according to Amendment 11."""
+    if not arch:
+        return None
+    a = arch.strip().lower()
+    if a in ("x86_64", "amd64", "x64"):
+        return "x86_64"
+    if a in ("aarch64", "arm64"):
+        return "aarch64"
+    return a
+
+
+def redact_secrets(obj: Any) -> Any:
+    """Recursively redact sensitive keys (Amendment 21)."""
+    SENSITIVE_KEYS = {"authorization", "token", "key", "password", "secret", "cookie", "credential", "admin_key"}
+    if isinstance(obj, dict):
+        res = {}
+        for k, v in obj.items():
+            if any(s in str(k).lower() for s in SENSITIVE_KEYS):
+                res[k] = "[REDACTED]"
+            else:
+                res[k] = redact_secrets(v)
+        return res
+    elif isinstance(obj, list):
+        return [redact_secrets(item) for item in obj]
+    return obj
+
+
+def format_bounded_event_details(details: Any) -> str:
+    """Format and bound JSON details to <= 64 KiB with secret redaction."""
+    redacted = redact_secrets(details)
+    raw = json.dumps(redacted, sort_keys=True, separators=(",", ":"))
+    if len(raw.encode("utf-8")) > 65536:
+        # Bounded truncation
+        truncated = {"truncated": True, "error": "Event details exceeded 64 KiB maximum bound"}
+        return json.dumps(truncated)
+    return raw
+
+
 class DeploymentService:
     @staticmethod
     async def get_next_generation(session: AsyncSession) -> int:
-        # Atomically fetch and increment the global deployment generation counter.
         stmt = select(DeploymentCounterModel).where(DeploymentCounterModel.counter_name == "global_generation").with_for_update()
         res = await session.execute(stmt)
         counter = res.scalar_one_or_none()
@@ -69,11 +109,28 @@ class DeploymentService:
         session: AsyncSession,
         req: ArtifactSourceCreate,
     ) -> ArtifactSourceModel:
-        # Register or update an artifact distribution endpoint.
         stmt = select(ArtifactSourceModel).where(ArtifactSourceModel.id == req.id)
         res = await session.execute(stmt)
         existing = res.scalar_one_or_none()
         if existing:
+            # Amendment 6: Artifact source immutability if referenced by releases
+            ref_stmt = select(ReleaseArtifactModel).where(ReleaseArtifactModel.artifact_source_id == req.id)
+            ref_res = await session.execute(ref_stmt)
+            referencing_release = ref_res.scalars().first()
+            if referencing_release:
+                if (
+                    existing.base_url != req.base_url
+                    or existing.allowed_host != req.allowed_host
+                    or existing.ca_policy != req.ca_policy
+                    or existing.max_artifact_bytes != req.max_artifact_bytes
+                    or existing.allow_private_network != req.allow_private_network
+                ):
+                    msg = (
+                        f"Artifact source '{req.id}' is referenced by existing releases "
+                        "and its security properties cannot be altered (source immutability enforced)"
+                    )
+                    raise ValueError(msg)
+
             existing.base_url = req.base_url
             existing.allowed_host = req.allowed_host
             existing.ca_policy = req.ca_policy
@@ -100,7 +157,6 @@ class DeploymentService:
         req: ReleaseArtifactCreate,
         registered_by: str = "configured-admin",
     ) -> ReleaseArtifactModel:
-        # Register release metadata into authoritative catalog.
         source_stmt = select(ArtifactSourceModel).where(ArtifactSourceModel.id == req.artifact_source_id)
         source_res = await session.execute(source_stmt)
         source = source_res.scalar_one_or_none()
@@ -131,7 +187,7 @@ class DeploymentService:
             release_key_id=req.release_key_id,
             artifact_source_id=req.artifact_source_id,
             target_os=req.target_os,
-            target_architecture=req.target_architecture,
+            target_architecture=normalize_arch(req.target_architecture) or "x86_64",
             target_ros_distro=req.target_ros_distro,
             registered_by=registered_by,
         )
@@ -146,14 +202,19 @@ class DeploymentService:
         target_filter: TargetFilter,
         release: ReleaseArtifactModel,
         rollout_strategy: RolloutStrategy,
-    ) -> List[Tuple[FleetDeviceModel, int]]:
-        # Resolve fleet devices, filter compatibility, partition deterministically into cohorts.
+    ) -> List[Tuple[FleetDeviceModel, int, Dict[str, Any]]]:
+        # Amendment 9, 10, 11, 12: Fail-closed target filtering, inventory freshness, arch normalization & evidence logging
+        freshness_threshold = int(os.getenv("OPENROBO_INVENTORY_FRESHNESS_SEC", "300"))
+        now_dt = utc_now()
+
         stmt = select(FleetDeviceModel).where(FleetDeviceModel.status == "ENROLLED")
         res = await session.execute(stmt)
         all_devices = list(res.scalars().all())
 
-        matched_devices: List[FleetDeviceModel] = []
+        matched_device_tuples: List[Tuple[FleetDeviceModel, Dict[str, Any]]] = []
+
         for dev in all_devices:
+            # 1. Target Filter explicit match
             if target_filter.device_ids and dev.id not in target_filter.device_ids:
                 continue
             if target_filter.domains and dev.domain not in target_filter.domains:
@@ -165,51 +226,91 @@ class DeploymentService:
                 if not all(c in dev_caps for c in target_filter.capabilities):
                     continue
 
-            hb = dev.last_heartbeat_json if isinstance(dev.last_heartbeat_json, dict) else {}
-            dev_os = hb.get("os", "linux")
-            dev_arch = hb.get("architecture", "x86_64")
-            dev_ros = hb.get("ros_distro", None)
+            # 2. Heartbeat Inventory & Freshness Check
+            is_fresh = False
+            if dev.last_heartbeat_at:
+                hb_dt = dev.last_heartbeat_at
+                if hb_dt.tzinfo is None:
+                    hb_dt = hb_dt.replace(tzinfo=timezone.utc)
+                diff_sec = (now_dt - hb_dt).total_seconds()
+                is_fresh = diff_sec <= freshness_threshold
 
-            if release.target_os and dev_os != release.target_os:
+            hb = dev.last_heartbeat_json if (is_fresh and isinstance(dev.last_heartbeat_json, dict)) else {}
+
+            dev_os = hb.get("os", "UNKNOWN") if is_fresh else "UNKNOWN"
+            dev_arch_raw = hb.get("architecture", "UNKNOWN") if is_fresh else "UNKNOWN"
+            dev_arch = normalize_arch(dev_arch_raw) if dev_arch_raw != "UNKNOWN" else "UNKNOWN"
+            dev_ros = hb.get("ros_distro", None) if is_fresh else None
+
+            # 3. Fail-Closed Target Compatibility Verification
+            req_os = release.target_os
+            req_arch = normalize_arch(release.target_architecture)
+            req_ros = release.target_ros_distro
+
+            if req_os and (dev_os == "UNKNOWN" or dev_os != req_os):
                 continue
-            if release.target_architecture and dev_arch != release.target_architecture:
+            if req_arch and (dev_arch == "UNKNOWN" or dev_arch != req_arch):
                 continue
-            if release.target_ros_distro and dev_ros != release.target_ros_distro:
+            if req_ros and (dev_ros is None or dev_ros != req_ros):
                 continue
 
-            matched_devices.append(dev)
+            # Target filter OS / arch / ros filters if explicitly set
+            if target_filter.os and (dev_os == "UNKNOWN" or dev_os != target_filter.os):
+                continue
+            if target_filter.architecture and (dev_arch == "UNKNOWN" or dev_arch != normalize_arch(target_filter.architecture)):
+                continue
+            if target_filter.ros_distro and (dev_ros is None or dev_ros != target_filter.ros_distro):
+                continue
 
-        if not matched_devices:
+            evidence = {
+                "device_id": dev.id,
+                "domain": dev.domain,
+                "robot_type": dev.robot_type,
+                "capabilities": dev.capabilities_json or [],
+                "os": dev_os,
+                "architecture": dev_arch,
+                "ros_distro": dev_ros,
+                "inventory_observed_at": dev.last_heartbeat_at.isoformat() if dev.last_heartbeat_at else None,
+                "matched_selector": "compatibility_verified",
+            }
+            matched_device_tuples.append((dev, evidence))
+
+        if not matched_device_tuples:
             return []
 
-        def device_sort_key(dev: FleetDeviceModel) -> str:
-            raw = f"{deployment_id}:{dev.id}".encode("utf-8")
+        def device_sort_key(item: Tuple[FleetDeviceModel, Dict[str, Any]]) -> str:
+            raw = f"{deployment_id}:{item[0].id}".encode("utf-8")
             return hashlib.sha256(raw).hexdigest()
 
-        matched_devices.sort(key=device_sort_key)
-        total_matched = len(matched_devices)
+        matched_device_tuples.sort(key=device_sort_key)
+        total_matched = len(matched_device_tuples)
 
-        device_stage_assignments: List[Tuple[FleetDeviceModel, int]] = []
+        device_stage_assignments: List[Tuple[FleetDeviceModel, int, Dict[str, Any]]] = []
+
         if rollout_strategy.strategy_type == RolloutStrategyType.IMMEDIATE_ALL or not rollout_strategy.stages:
-            for dev in matched_devices:
-                device_stage_assignments.append((dev, 0))
+            for dev, ev in matched_device_tuples:
+                ev["matched_stage"] = 0
+                device_stage_assignments.append((dev, 0, ev))
             return device_stage_assignments
 
+        # Cumulative Canary stage sizing (Amendment 18)
         curr_idx = 0
         for s_idx, stage_cfg in enumerate(rollout_strategy.stages):
             if curr_idx >= total_matched:
                 break
             if s_idx == len(rollout_strategy.stages) - 1:
-                stage_devices = matched_devices[curr_idx:]
+                stage_items = matched_device_tuples[curr_idx:]
                 curr_idx = total_matched
             else:
                 pct = stage_cfg.target_percentage
-                count = math.ceil(total_matched * pct / 100.0)
-                stage_devices = matched_devices[curr_idx : curr_idx + count]
-                curr_idx += count
+                target_cumulative_count = math.ceil(total_matched * pct / 100.0)
+                stage_count = max(0, target_cumulative_count - curr_idx)
+                stage_items = matched_device_tuples[curr_idx : curr_idx + stage_count]
+                curr_idx += stage_count
 
-            for dev in stage_devices:
-                device_stage_assignments.append((dev, s_idx))
+            for dev, ev in stage_items:
+                ev["matched_stage"] = s_idx
+                device_stage_assignments.append((dev, s_idx, ev))
 
         return device_stage_assignments
 
@@ -219,12 +320,20 @@ class DeploymentService:
         req: DeploymentCreate,
         created_by: str = "configured-admin",
     ) -> DeploymentModel:
-        # Create a new deployment, snapshot release metadata, assign devices, persist instructions.
+        computed_request_digest = req.compute_request_digest()
+
+        # Amendment 13: Idempotency Request Digest validation
         if req.idempotency_key:
             stmt = select(DeploymentModel).where(DeploymentModel.idempotency_key == req.idempotency_key)
             res = await session.execute(stmt)
             existing = res.scalar_one_or_none()
             if existing:
+                if existing.request_digest and existing.request_digest != computed_request_digest:
+                    msg = (
+                        f"IDEMPOTENCY_CONFLICT: Idempotency key '{req.idempotency_key}' was previously used with "
+                        "different deployment request parameters"
+                    )
+                    raise ValueError(msg)
                 return existing
 
         rel_stmt = select(ReleaseArtifactModel).where(ReleaseArtifactModel.release_id == req.release_id)
@@ -258,15 +367,39 @@ class DeploymentService:
             release=release,
             rollout_strategy=req.rollout_strategy,
         )
-
         if not assignments:
-            raise ValueError("Target filter matched 0 eligible devices in the fleet")
+            raise ValueError("No enrolled fleet devices matched the release target requirements and target filter")
 
-        total_stages = (
-            len(req.rollout_strategy.stages)
-            if req.rollout_strategy.strategy_type == RolloutStrategyType.CANARY and req.rollout_strategy.stages
-            else 1
-        )
+        # Amendment 14: Persistent Device Mutation Lease Acquisition
+        for dev, _, _ in assignments:
+            lease_stmt = select(DeviceDeploymentLeaseModel).where(DeviceDeploymentLeaseModel.device_id == dev.id).with_for_update()
+            lease_res = await session.execute(lease_stmt)
+            existing_lease = lease_res.scalar_one_or_none()
+            if existing_lease:
+                dep_check = select(DeploymentModel).where(DeploymentModel.id == existing_lease.deployment_id)
+                dep_check_res = await session.execute(dep_check)
+                holder_dep = dep_check_res.scalar_one_or_none()
+                if holder_dep and holder_dep.status not in (
+                    DeploymentState.COMPLETED.value,
+                    DeploymentState.CANCELLED.value,
+                    DeploymentState.FAILED.value,
+                ):
+                    raise ValueError(
+                        f"Device '{dev.id}' is locked by active deployment '{existing_lease.deployment_id}' (status: {holder_dep.status})"
+                    )
+                else:
+                    await session.delete(existing_lease)
+
+            lease = DeviceDeploymentLeaseModel(
+                device_id=dev.id,
+                deployment_id=deployment_id,
+                generation=generation,
+                acquired_at=utc_now(),
+                updated_at=utc_now(),
+            )
+            session.add(lease)
+
+        total_stages = len(req.rollout_strategy.stages) if req.rollout_strategy.stages else 1
 
         deployment = DeploymentModel(
             id=deployment_id,
@@ -282,38 +415,34 @@ class DeploymentService:
             target_ros_distro=release.target_ros_distro,
             rollout_strategy=req.rollout_strategy.model_dump_json(),
             target_filter=req.target_filter.model_dump_json(),
-            status=DeploymentState.STAGING_STAGE_0.value,
+            status=DeploymentState.STAGE_0_STAGING.value,
             current_stage=0,
             total_stages=total_stages,
             generation=generation,
             version=1,
             idempotency_key=req.idempotency_key,
+            request_digest=computed_request_digest,
             created_by=created_by,
         )
         session.add(deployment)
         release.immutable_after_deployment = True
 
-        for dev, stage_idx in assignments:
-            dev_dep = DeviceDeploymentModel(
+        for dev, stage_idx, ev in assignments:
+            dd = DeviceDeploymentModel(
                 deployment_id=deployment_id,
                 device_id=dev.id,
                 stage_index=stage_idx,
                 status=DeviceDeploymentState.PENDING.value,
                 generation=generation,
-                target_snapshot_json=json.dumps(
-                    {
-                        "name": dev.name,
-                        "domain": dev.domain,
-                        "robot_type": dev.robot_type,
-                        "matched_stage": stage_idx,
-                    }
-                ),
+                target_snapshot_json=json.dumps(ev, sort_keys=True),
             )
-            session.add(dev_dep)
+            session.add(dd)
 
             if stage_idx == 0:
                 payload = {
+                    "deployment_id": deployment_id,
                     "release_id": release.release_id,
+                    "release_version": release.release_version,
                     "manifest_digest": release.manifest_digest,
                     "artifact_digest": release.artifact_digest,
                     "workspace_digest": release.workspace_digest,
@@ -341,7 +470,7 @@ class DeploymentService:
         event = DeploymentEventModel(
             deployment_id=deployment_id,
             event_type="DEPLOYMENT_CREATED",
-            details=json.dumps(
+            details=format_bounded_event_details(
                 {
                     "release_id": release.release_id,
                     "total_devices": len(assignments),
@@ -354,55 +483,6 @@ class DeploymentService:
 
         await session.flush()
         return deployment
-
-    @staticmethod
-    async def get_deployment_summary(session: AsyncSession, deployment_id: str) -> Optional[Dict[str, Any]]:
-        stmt = select(DeploymentModel).where(DeploymentModel.id == deployment_id)
-        res = await session.execute(stmt)
-        deployment = res.scalar_one_or_none()
-        if not deployment:
-            return None
-
-        dev_stmt = select(DeviceDeploymentModel).where(DeviceDeploymentModel.deployment_id == deployment_id)
-        dev_res = await session.execute(dev_stmt)
-        device_deployments = list(dev_res.scalars().all())
-
-        stages_dict: Dict[int, Dict[str, int]] = {}
-        strategy = RolloutStrategy.model_validate_json(deployment.rollout_strategy)
-
-        for s_idx in range(deployment.total_stages):
-            pct = 100
-            if strategy.stages and s_idx < len(strategy.stages):
-                pct = strategy.stages[s_idx].target_percentage
-            stages_dict[s_idx] = {
-                "stage_index": s_idx,
-                "target_percentage": pct,
-                "total_devices": 0,
-                "pending": 0,
-                "fetching": 0,
-                "verifying": 0,
-                "staging": 0,
-                "staged": 0,
-                "activating": 0,
-                "active": 0,
-                "failed": 0,
-                "cancelled": 0,
-            }
-
-        for dd in device_deployments:
-            s_idx = dd.stage_index
-            if s_idx in stages_dict:
-                stages_dict[s_idx]["total_devices"] += 1
-                status_lower = dd.status.lower()
-                if status_lower in stages_dict[s_idx]:
-                    stages_dict[s_idx][status_lower] += 1
-
-        stage_summaries = [StageSummary(**data) for data in stages_dict.values()]
-        return {
-            "deployment": deployment,
-            "stages": stage_summaries,
-            "device_deployments": device_deployments,
-        }
 
     @staticmethod
     async def approve_stage_progression(
@@ -419,33 +499,32 @@ class DeploymentService:
 
         if deployment.version != req.expected_version:
             raise ValueError(
-                f"Deployment version mismatch (expected {req.expected_version}, current {deployment.version}). Optimistic conflict."
+                f"Optimistic conflict: expected version {req.expected_version}, but deployment is currently version {deployment.version}"
+            )
+        if deployment.status != req.expected_state.value:
+            raise ValueError(
+                f"State mismatch: expected deployment state {req.expected_state.value}, but deployment is currently in {deployment.status}"
             )
 
-        if deployment.status != req.expected_state.value:
-            raise ValueError(f"Deployment state mismatch (expected {req.expected_state.value}, current {deployment.status}).")
-
         current_stage = deployment.current_stage
-        if current_stage != req.stage_index:
-            raise ValueError(f"Approval stage index {req.stage_index} does not match current deployment stage {current_stage}.")
-
+        target_state: DeploymentState
         generation = await DeploymentService.get_next_generation(session)
         deployment.generation = generation
-        target_state: DeploymentState
 
-        if req.action == ApprovalAction.APPROVE_CURRENT_COHORT_ACTIVATION:
+        if req.action in (ApprovalAction.APPROVE_ACTIVATION, ApprovalAction.APPROVE_CURRENT_COHORT_ACTIVATION):
             target_state = DeploymentState[f"ACTIVATING_STAGE_{current_stage}"]
             validate_deployment_transition(DeploymentState(deployment.status), target_state)
 
             dev_stmt = select(DeviceDeploymentModel).where(
                 DeviceDeploymentModel.deployment_id == deployment_id,
                 DeviceDeploymentModel.stage_index == current_stage,
+                DeviceDeploymentModel.status == DeviceDeploymentState.STAGED.value,
             )
             dev_res = await session.execute(dev_stmt)
             for dd in dev_res.scalars().all():
                 payload = {
-                    "release_id": deployment.release_id,
-                    "target_slot": dd.staged_slot or "B",
+                    "deployment_id": deployment_id,
+                    "slot": dd.staged_slot or "slot-b",
                 }
                 canonical_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
                 payload_digest = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
@@ -462,33 +541,35 @@ class DeploymentService:
                 )
                 session.add(instruction)
 
-        elif req.action == ApprovalAction.APPROVE_NEXT_COHORT_STAGING:
+        elif req.action == ApprovalAction.APPROVE_NEXT_STAGE:
             next_stage = current_stage + 1
             if next_stage >= deployment.total_stages:
-                raise ValueError("No next stage available; deployment is at final stage.")
-            target_state = DeploymentState[f"STAGING_STAGE_{next_stage}"]
-            validate_deployment_transition(DeploymentState(deployment.status), target_state)
+                raise ValueError("No further canary stages configured to approve")
 
+            target_state = DeploymentState[f"STAGE_{next_stage}_STAGING"]
+            validate_deployment_transition(DeploymentState(deployment.status), target_state)
             deployment.current_stage = next_stage
+
+            snapshot = ReleaseSnapshot.model_validate_json(deployment.release_snapshot_json)
 
             dev_stmt = select(DeviceDeploymentModel).where(
                 DeviceDeploymentModel.deployment_id == deployment_id,
                 DeviceDeploymentModel.stage_index == next_stage,
             )
             dev_res = await session.execute(dev_stmt)
-            release_snapshot = ReleaseSnapshot.model_validate_json(deployment.release_snapshot_json)
-
             for dd in dev_res.scalars().all():
                 payload = {
-                    "release_id": deployment.release_id,
-                    "manifest_digest": release_snapshot.manifest_digest,
-                    "artifact_digest": release_snapshot.artifact_digest,
-                    "workspace_digest": release_snapshot.workspace_digest,
-                    "release_key_id": release_snapshot.release_key_id,
-                    "artifact_source_id": release_snapshot.artifact_source_id,
-                    "target_os": release_snapshot.target_os,
-                    "target_architecture": release_snapshot.target_architecture,
-                    "target_ros_distro": release_snapshot.target_ros_distro,
+                    "deployment_id": deployment_id,
+                    "release_id": snapshot.release_id,
+                    "release_version": snapshot.release_version,
+                    "manifest_digest": snapshot.manifest_digest,
+                    "artifact_digest": snapshot.artifact_digest,
+                    "workspace_digest": snapshot.workspace_digest,
+                    "release_key_id": snapshot.release_key_id,
+                    "artifact_source_id": snapshot.artifact_source_id,
+                    "target_os": snapshot.target_os,
+                    "target_architecture": snapshot.target_architecture,
+                    "target_ros_distro": snapshot.target_ros_distro,
                 }
                 canonical_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
                 payload_digest = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
@@ -509,9 +590,11 @@ class DeploymentService:
             target_state = DeploymentState.COMPLETED
             validate_deployment_transition(DeploymentState(deployment.status), target_state)
             deployment.completed_at = utc_now()
+            # Release mutation leases on completion
+            await session.execute(delete(DeviceDeploymentLeaseModel).where(DeviceDeploymentLeaseModel.deployment_id == deployment_id))
 
         elif req.action == ApprovalAction.REJECT_AND_CANCEL:
-            target_state = DeploymentState.CANCELLED
+            target_state = DeploymentState.CANCELLING
             validate_deployment_transition(DeploymentState(deployment.status), target_state)
             deployment.cancelled_at = utc_now()
             await DeploymentService.cancel_remaining_devices(session, deployment_id, generation)
@@ -535,7 +618,7 @@ class DeploymentService:
         event = DeploymentEventModel(
             deployment_id=deployment_id,
             event_type="STAGE_APPROVAL_GRANTED",
-            details=json.dumps(
+            details=format_bounded_event_details(
                 {
                     "action": req.action.value,
                     "approved_by": approved_by,
@@ -564,7 +647,6 @@ class DeploymentService:
         )
         dev_res = await session.execute(dev_stmt)
         for dd in dev_res.scalars().all():
-            dd.status = DeviceDeploymentState.CANCELLED.value
             payload = {"deployment_id": deployment_id}
             canonical_payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
             payload_digest = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
@@ -582,11 +664,74 @@ class DeploymentService:
             session.add(instruction)
 
     @staticmethod
+    async def pause_deployment(session: AsyncSession, deployment_id: str) -> DeploymentModel:
+        stmt = select(DeploymentModel).where(DeploymentModel.id == deployment_id).with_for_update()
+        res = await session.execute(stmt)
+        deployment = res.scalar_one_or_none()
+        if not deployment:
+            raise ValueError(f"Deployment '{deployment_id}' not found")
+
+        curr_state = DeploymentState(deployment.status)
+        if curr_state in (DeploymentState.COMPLETED, DeploymentState.CANCELLED, DeploymentState.FAILED, DeploymentState.PAUSED):
+            raise ValueError(f"Cannot pause deployment in state {curr_state.value}")
+
+        deployment.status = DeploymentState.PAUSED.value
+        deployment.version += 1
+
+        event = DeploymentEventModel(
+            deployment_id=deployment_id,
+            event_type="DEPLOYMENT_PAUSED",
+            details=format_bounded_event_details({"previous_state": curr_state.value, "version": deployment.version}),
+        )
+        session.add(event)
+        await session.flush()
+        return deployment
+
+    @staticmethod
+    async def resume_deployment(session: AsyncSession, deployment_id: str) -> DeploymentModel:
+        stmt = select(DeploymentModel).where(DeploymentModel.id == deployment_id).with_for_update()
+        res = await session.execute(stmt)
+        deployment = res.scalar_one_or_none()
+        if not deployment:
+            raise ValueError(f"Deployment '{deployment_id}' not found")
+
+        if deployment.status != DeploymentState.PAUSED.value:
+            raise ValueError(f"Deployment is not paused (current: {deployment.status})")
+
+        # Resume to current stage state
+        curr_stage = deployment.current_stage
+        resumed_state = DeploymentState[f"STAGE_{curr_stage}_STAGING"]
+        deployment.status = resumed_state.value
+        deployment.version += 1
+
+        event = DeploymentEventModel(
+            deployment_id=deployment_id,
+            event_type="DEPLOYMENT_RESUMED",
+            details=format_bounded_event_details({"new_state": resumed_state.value, "version": deployment.version}),
+        )
+        session.add(event)
+        await session.flush()
+        return deployment
+
+    @staticmethod
     async def handle_device_status_report(
         session: AsyncSession,
         device_id: str,
         report: DeploymentStatusReport,
     ) -> DeviceDeploymentModel:
+        # Amendment 2: Validate instruction_id, deployment_id, device_id, generation
+        inst_stmt = select(DeploymentInstructionModel).where(
+            DeploymentInstructionModel.id == report.instruction_id,
+            DeploymentInstructionModel.deployment_id == report.deployment_id,
+            DeploymentInstructionModel.device_id == device_id,
+        )
+        inst_res = await session.execute(inst_stmt)
+        inst = inst_res.scalar_one_or_none()
+        if not inst:
+            raise ValueError(
+                f"No instruction found correlating to report instruction_id '{report.instruction_id}' for device '{device_id}'"
+            )
+
         stmt = (
             select(DeviceDeploymentModel)
             .where(
@@ -619,8 +764,9 @@ class DeploymentService:
             deployment_id=report.deployment_id,
             device_id=device_id,
             event_type="DEVICE_STATUS_TRANSITION",
-            details=json.dumps(
+            details=format_bounded_event_details(
                 {
+                    "instruction_id": report.instruction_id,
                     "previous_state": current_state.value,
                     "new_state": new_state.value,
                     "generation": report.generation,
@@ -640,25 +786,39 @@ class DeploymentService:
         dep_stmt = select(DeploymentModel).where(DeploymentModel.id == deployment_id).with_for_update()
         dep_res = await session.execute(dep_stmt)
         deployment = dep_res.scalar_one_or_none()
-        if not deployment or deployment.current_stage != stage_index:
+        if not deployment:
             return
 
         dev_stmt = select(DeviceDeploymentModel).where(
             DeviceDeploymentModel.deployment_id == deployment_id,
-            DeviceDeploymentModel.stage_index == stage_index,
         )
         dev_res = await session.execute(dev_stmt)
-        devices = list(dev_res.scalars().all())
-        if not devices:
+        all_deployment_devices = list(dev_res.scalars().all())
+        if not all_deployment_devices:
             return
 
-        all_staged = all(d.status in (DeviceDeploymentState.STAGED.value, DeviceDeploymentState.ACTIVE.value) for d in devices)
-        all_active = all(d.status == DeviceDeploymentState.ACTIVE.value for d in devices)
-        any_failed = any(d.status == DeviceDeploymentState.FAILED.value for d in devices)
+        stage_devices = [d for d in all_deployment_devices if d.stage_index == stage_index]
+        all_staged = stage_devices and all(
+            d.status in (DeviceDeploymentState.STAGED.value, DeviceDeploymentState.ACTIVE.value) for d in stage_devices
+        )
+        all_active = stage_devices and all(d.status == DeviceDeploymentState.ACTIVE.value for d in stage_devices)
+        any_failed = any(d.status == DeviceDeploymentState.FAILED.value for d in stage_devices)
 
         curr_state = DeploymentState(deployment.status)
 
-        if curr_state == DeploymentState[f"STAGING_STAGE_{stage_index}"] and all_staged:
+        # Handling CANCELLING state
+        if curr_state == DeploymentState.CANCELLING:
+            all_terminal = all(
+                d.status in (DeviceDeploymentState.ACTIVE.value, DeviceDeploymentState.CANCELLED.value, DeviceDeploymentState.FAILED.value)
+                for d in all_deployment_devices
+            )
+            if all_terminal:
+                deployment.status = DeploymentState.CANCELLED.value
+                deployment.version += 1
+                await session.execute(delete(DeviceDeploymentLeaseModel).where(DeviceDeploymentLeaseModel.deployment_id == deployment_id))
+            return
+
+        if curr_state == DeploymentState[f"STAGE_{stage_index}_STAGING"] and all_staged:
             next_state = DeploymentState[f"STAGE_{stage_index}_WAITING_FOR_ACTIVATION_APPROVAL"]
             deployment.status = next_state.value
             deployment.version += 1
@@ -671,23 +831,70 @@ class DeploymentService:
                 deployment.status = DeploymentState.COMPLETED.value
                 deployment.completed_at = utc_now()
                 deployment.version += 1
-        elif any_failed and not curr_state.value.endswith("_FAILED"):
+                await session.execute(delete(DeviceDeploymentLeaseModel).where(DeviceDeploymentLeaseModel.deployment_id == deployment_id))
+        elif any_failed and not curr_state.value.endswith("_FAILED") and curr_state != DeploymentState.FAILED:
             deployment.status = DeploymentState[f"STAGE_{stage_index}_FAILED"].value
             deployment.version += 1
+            await session.execute(delete(DeviceDeploymentLeaseModel).where(DeviceDeploymentLeaseModel.deployment_id == deployment_id))
 
     @staticmethod
     async def get_pending_instructions_for_device(
         session: AsyncSession,
         device_id: str,
     ) -> List[DeploymentInstructionModel]:
+        now_dt = utc_now()
+        # Amendment 4: Query PENDING or unacknowledged non-expired retryable SENT
         stmt = (
             select(DeploymentInstructionModel)
             .where(
                 DeploymentInstructionModel.device_id == device_id,
-                DeploymentInstructionModel.status == InstructionStatus.PENDING.value,
-                DeploymentInstructionModel.expires_at > utc_now(),
+                DeploymentInstructionModel.expires_at > now_dt,
+                (
+                    (DeploymentInstructionModel.status == InstructionStatus.PENDING.value)
+                    | (
+                        (DeploymentInstructionModel.status == InstructionStatus.SENT.value)
+                        & (DeploymentInstructionModel.acknowledged_at.is_(None))
+                        & ((DeploymentInstructionModel.next_attempt_at.is_(None)) | (DeploymentInstructionModel.next_attempt_at <= now_dt))
+                    )
+                ),
             )
             .order_by(DeploymentInstructionModel.generation.asc())
         )
         res = await session.execute(stmt)
         return list(res.scalars().all())
+
+    @staticmethod
+    async def get_deployment_summary(session: AsyncSession, deployment_id: str) -> Optional[Dict[str, Any]]:
+        stmt = select(DeploymentModel).where(DeploymentModel.id == deployment_id)
+        res = await session.execute(stmt)
+        dep = res.scalar_one_or_none()
+        if not dep:
+            return None
+
+        dev_stmt = select(DeviceDeploymentModel).where(DeviceDeploymentModel.deployment_id == deployment_id)
+        dev_res = await session.execute(dev_stmt)
+        devices = list(dev_res.scalars().all())
+
+        strategy = RolloutStrategy.model_validate_json(dep.rollout_strategy)
+        total_stages = dep.total_stages
+
+        stages_map: Dict[int, StageSummary] = {}
+        for s_idx in range(total_stages):
+            target_pct = strategy.stages[s_idx].target_percentage if strategy.stages and s_idx < len(strategy.stages) else 100
+            stages_map[s_idx] = StageSummary(stage_index=s_idx, target_percentage=target_pct, total_devices=0)
+
+        for dev in devices:
+            s_idx = dev.stage_index
+            if s_idx not in stages_map:
+                stages_map[s_idx] = StageSummary(stage_index=s_idx, target_percentage=100, total_devices=0)
+            stage_sum = stages_map[s_idx]
+            stage_sum.total_devices += 1
+
+            st = dev.status.lower()
+            if hasattr(stage_sum, st):
+                setattr(stage_sum, st, getattr(stage_sum, st) + 1)
+
+        return {
+            "deployment": dep,
+            "stages": [stages_map[i] for i in sorted(stages_map.keys())],
+        }

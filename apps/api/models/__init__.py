@@ -7,6 +7,7 @@ from .deployment import (
     DeploymentEventModel,
     DeploymentInstructionModel,
     DeploymentModel,
+    DeviceDeploymentLeaseModel,
     DeviceDeploymentModel,
     ReleaseArtifactModel,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "ArtifactSourceModel",
     "DeploymentModel",
     "DeviceDeploymentModel",
+    "DeviceDeploymentLeaseModel",
     "DeploymentInstructionModel",
     "DeploymentApprovalModel",
     "DeploymentEventModel",

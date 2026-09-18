@@ -682,6 +682,7 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
             inst_envelope = DeploymentInstructionEnvelope(
                 instruction_id=inst.id,
                 deployment_id=inst.deployment_id,
+                device_id=inst.device_id,
                 generation=inst.generation,
                 instruction_type=InstructionType(inst.instruction_type),
                 payload=payload_dict,
@@ -697,7 +698,9 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
             )
             inst.status = "SENT"
             inst.attempt_count += 1
-            inst.last_attempt_at = datetime.now(timezone.utc)
+            now_dt = datetime.now(timezone.utc)
+            inst.last_attempt_at = now_dt
+            inst.next_attempt_at = now_dt + timedelta(seconds=min(300, 2 ** min(inst.attempt_count, 8)))
         if pending_instructions:
             await db.commit()
     except Exception as e:
@@ -793,10 +796,37 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
                     )
                     inst_res = await db.execute(inst_stmt)
                     inst = inst_res.scalar_one_or_none()
-                    if inst:
-                        inst.status = "ACKNOWLEDGED" if ack_env.accepted else "REJECTED"
-                        inst.acknowledged_at = datetime.now(timezone.utc)
-                        await db.commit()
+                    if not inst:
+                        await websocket.send_json(
+                            {"status": "ERROR", "error": f"Instruction '{ack_env.instruction_id}' not found for device '{device.id}'"}
+                        )
+                        continue
+
+                    # Amendment 3: Strict ACK correlation
+                    if ack_env.deployment_id != inst.deployment_id:
+                        await websocket.send_json(
+                            {"status": "ERROR", "error": f"ACK deployment_id mismatch: {ack_env.deployment_id} != {inst.deployment_id}"}
+                        )
+                        continue
+                    if ack_env.generation != inst.generation:
+                        await websocket.send_json(
+                            {"status": "ERROR", "error": f"ACK generation mismatch: {ack_env.generation} != {inst.generation}"}
+                        )
+                        continue
+                    if inst.status in ("EXPIRED", "CANCELLED", "FAILED"):
+                        await websocket.send_json(
+                            {"status": "ERROR", "error": f"Cannot ACK instruction in terminal status '{inst.status}'"}
+                        )
+                        continue
+
+                    if ack_env.accepted:
+                        inst.status = "ACKNOWLEDGED"
+                    else:
+                        inst.status = "REJECTED"
+                        inst.rejection_reason = ack_env.error_message or ack_env.error_code or "REJECTED"
+
+                    inst.acknowledged_at = datetime.now(timezone.utc)
+                    await db.commit()
                     await websocket.send_json({"status": "ACK", "message_id": envelope.message_id, "device_id": device.id})
                 except Exception as e:
                     await websocket.send_json({"status": "ERROR", "error": f"Invalid DEPLOYMENT_ACK payload: {e}"})
