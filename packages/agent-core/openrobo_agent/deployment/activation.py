@@ -46,11 +46,13 @@ def activate_staged_slot(
         created_at=now_str,
     )
 
-    # 2. Write Transaction Journal
+    # 2. Write Transaction Journal with fsync
     journal_file = manager.intent_journal_file
     temp_journal = manager.deployment_root / f"activation.intent.json.tmp.{os.getpid()}"
     with open(temp_journal, "w", encoding="utf-8") as f:
         f.write(intent.model_dump_json(indent=2))
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(temp_journal, journal_file)
 
     target_dir = manager.get_slot_dir(target_slot)
@@ -64,6 +66,8 @@ def activate_staged_slot(
             # Windows fallback pointer
             with open(manager.current_ptr_file, "w", encoding="utf-8") as f:
                 f.write(target_slot)
+                f.flush()
+                os.fsync(f.fileno())
             switched_pointer = True
         else:
             # POSIX atomic symlink replacement
@@ -78,6 +82,8 @@ def activate_staged_slot(
             try:
                 with open(manager.current_ptr_file, "w", encoding="utf-8") as f:
                     f.write(target_slot)
+                    f.flush()
+                    os.fsync(f.fileno())
                 switched_pointer = True
             except Exception as e2:
                 journal_file.unlink(missing_ok=True)
@@ -87,6 +93,8 @@ def activate_staged_slot(
     intent.state = "SWITCHED"
     with open(temp_journal, "w", encoding="utf-8") as f:
         f.write(intent.model_dump_json(indent=2))
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(temp_journal, journal_file)
 
     # 5. Update Partition Slot Metadata

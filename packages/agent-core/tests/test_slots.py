@@ -189,3 +189,109 @@ def test_rollback_rejects_revoked_key(tmp_path, test_pki):
     assert ok_rb is False
     assert "revoked" in msg_rb.lower()
     assert manager.get_active_slot_id() == "slot-b"
+
+
+def test_staging_dev_key_override_and_gate(tmp_path, test_pki, monkeypatch):
+    store, priv_bytes, key_id = test_pki
+    manager = ABSlotManager(tmp_path / "deploy_dev_override")
+
+    ws = tmp_path / "ws_dev"
+    ws.mkdir()
+    (ws / "main.py").write_text("print('dev')", encoding="utf-8")
+    art_p, man_p, sig_p = _build_release(ws, tmp_path / "dist_dev", "rel-dev", "1.0.0", key_id, priv_bytes)
+
+    dev_pub = store.get_trusted_key(key_id).public_key
+
+    # 1. Dev mode + flag + explicit param -> Allowed
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("OPENROBO_ALLOW_DEV_RELEASE_KEY", "true")
+    ok1, _ = stage_release_artifact(manager, art_p, man_p, sig_p, store, dev_public_key=dev_pub, allow_dev_key=True)
+    assert ok1 is True
+    manager.clear_slot("slot-a")
+
+    # 2. Dev mode without flag -> Rejected
+    monkeypatch.delenv("OPENROBO_ALLOW_DEV_RELEASE_KEY", raising=False)
+    ok2, msg2 = stage_release_artifact(manager, art_p, man_p, sig_p, store, dev_public_key=dev_pub, allow_dev_key=True)
+    assert ok2 is False
+    assert "override rejected" in msg2.lower()
+
+    # 3. Production mode + flag + explicit param -> Rejected
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("OPENROBO_ALLOW_DEV_RELEASE_KEY", "true")
+    ok3, msg3 = stage_release_artifact(manager, art_p, man_p, sig_p, store, dev_public_key=dev_pub, allow_dev_key=True)
+    assert ok3 is False
+    assert "override rejected" in msg3.lower()
+
+    # 4. Production mode without flag -> Rejected
+    monkeypatch.delenv("OPENROBO_ALLOW_DEV_RELEASE_KEY", raising=False)
+    ok4, msg4 = stage_release_artifact(manager, art_p, man_p, sig_p, store, dev_public_key=dev_pub, allow_dev_key=True)
+    assert ok4 is False
+    assert "override rejected" in msg4.lower()
+
+
+def test_distinct_manifest_and_workspace_digests(tmp_path, test_pki):
+    store, priv_bytes, key_id = test_pki
+    manager = ABSlotManager(tmp_path / "deploy_digests")
+
+    ws = tmp_path / "ws_dig"
+    ws.mkdir()
+    (ws / "main.py").write_text("print('digests')", encoding="utf-8")
+    art_p, man_p, sig_p = _build_release(ws, tmp_path / "dist_dig", "rel-dig", "1.0.0", key_id, priv_bytes)
+
+    ok, _ = stage_release_artifact(manager, art_p, man_p, sig_p, store)
+    assert ok is True
+    meta = manager.get_slot_metadata("slot-a")
+    assert meta is not None
+    assert meta.manifest_digest is not None
+    assert meta.workspace_digest is not None
+    assert meta.artifact_digest is not None
+    # All three must be distinct non-empty strings
+    assert meta.manifest_digest != meta.workspace_digest
+    assert meta.manifest_digest != meta.artifact_digest
+
+
+def test_rollback_rejects_extra_unlisted_file(tmp_path, test_pki):
+    store, priv_bytes, key_id = test_pki
+    manager = ABSlotManager(tmp_path / "deploy_extra_file")
+
+    # Stage & activate v1
+    ws1 = tmp_path / "ws1"
+    ws1.mkdir()
+    (ws1 / "main.py").write_text("print('v1')", encoding="utf-8")
+    art1, man1, sig1 = _build_release(ws1, tmp_path / "dist1", "rel-1", "1.0.0", key_id, priv_bytes)
+    stage_release_artifact(manager, art1, man1, sig1, store)
+    activate_staged_slot(manager, "slot-a")
+
+    # Stage & activate v2
+    ws2 = tmp_path / "ws2"
+    ws2.mkdir()
+    (ws2 / "main.py").write_text("print('v2')", encoding="utf-8")
+    art2, man2, sig2 = _build_release(ws2, tmp_path / "dist2", "rel-2", "2.0.0", key_id, priv_bytes)
+    stage_release_artifact(manager, art2, man2, sig2, store)
+    activate_staged_slot(manager, "slot-b")
+
+    # Drop unlisted malicious file into slot-a
+    (manager.get_slot_dir("slot-a") / "malicious.py").write_text("evil()", encoding="utf-8")
+
+    ok_rb, msg_rb = rollback_to_previous(manager, store)
+    assert ok_rb is False
+    assert "unexpected unlisted files" in msg_rb.lower()
+    assert manager.get_slot_metadata("slot-a").state == SlotState.QUARANTINED
+
+
+def test_corrupted_slots_json_fails_safe(tmp_path):
+    dep_root = tmp_path / "deploy_corrupted"
+    dep_root.mkdir()
+    (dep_root / "slots.json").write_text("{ corrupt json ", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="corrupted"):
+        ABSlotManager(dep_root)
+
+
+def test_corrupted_activation_journal_fails_safe(tmp_path):
+    dep_root = tmp_path / "deploy_corrupted_journal"
+    dep_root.mkdir()
+    (dep_root / "activation.intent.json").write_text("{ corrupt intent ", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="corrupted"):
+        ABSlotManager(dep_root)
