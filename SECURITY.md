@@ -61,3 +61,8 @@ OpenRobo enforces strict security controls on local process and container execut
 - **mTLS & Trusted Reverse Proxy Boundaries**: Agent transport presents genuine TLS client certificates via Python `ssl.SSLContext`. Proxy identity headers are accepted strictly from configured trusted proxy subnets.
 - **Single-Use Enrollment Tokens & Anti-Race**: High-entropy tokens stored as SHA-256 hashes with atomic SQL consumption checking `is_used=false AND expires_at > now`.
 - **Replay Protection & Device Isolation**: Sliding-window ±60s clock skew check and bounded in-memory deduplication store. Cross-device writes are blocked with `403 Forbidden`.
+
+### Release Artifact & OTA Deployment Security (M7.2.1)
+1. **Ed25519 Detached Signing**: Every release manifest is canonicalized to deterministic JSON and digitally signed. Agents strictly require a verified signature from a trusted, unexpired, unrevoked public key prior to staging.
+2. **Safe Extraction Sandbox**: `SafeArtifactExtractor` rigorously rejects `../`, absolute paths, Windows drive paths, UNC paths, symlink escapes, and archive bombs.
+3. **Dual A/B Partition Isolation**: The active workspace slot is protected from in-place overwrites. Staging occurs in the inactive partition, followed by atomic pointer replacement and mechanical rollback capability.

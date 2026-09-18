@@ -21,6 +21,7 @@
 | **M6** | Runtime Architecture, Execution Providers & Adapters | `IMPLEMENTED & TESTED` | 131/131 Pytest, 16/16 Vitest | `docs/M6_VERIFICATION_REPORT.md` |
 | **M6.1** | Live Runtime Wiring, Truthful Readiness & Studio | `LIVE WIRING VERIFIED` | 131/131 Pytest, 16/16 Vitest | `docs/M6_LIVE_RUNTIME_REPORT.md` |
 | **M6.2** | Live Runtime Proof, End-to-End Acceptance & Colcon | `LIVE ACCEPTANCE VERIFIED` | 131/131 Pytest, 16/16 Vitest, 10/10 Live Phases | `docs/M6_LIVE_ACCEPTANCE_REPORT.md` |
+| **M7.2.1** | Signed Release Artifacts & Local A/B Deployment Foundation | `VERIFIED` | 189/189 Pytest, 19/19 Vitest, 8 M7.2.1 Tests | `docs/M7_2_1_VERIFICATION_REPORT.md` |
 | **M7.1.2** | Real mTLS Server Acceptance & Delivery Contract Closure | `REAL mTLS VERIFIED` | 164/164 Pytest, 19/19 Vitest, 8 Real mTLS Tests | `docs/M7_1_2_REAL_MTLS_ACCEPTANCE_REPORT.md` |
 | **M7.1** | Secure Remote Agent, Device Identity & Fleet Foundation | `LOCALLY ACCEPTANCE VERIFIED & LOAD SIMULATED` | 149/149 Pytest, 19/19 Vitest, 3-Agent Acceptance, 100-Agent Sim | `docs/M7_1_VERIFICATION_REPORT.md` |
 
@@ -92,3 +93,15 @@
 | **REQ-M7-18** | 25-Agent Real mTLS Concurrency Acceptance | `VERIFIED` | 25 concurrent mTLS client connections performing mutual TLS handshakes and heartbeats | `test_real_mtls_transport.py` | `tests/integration/test_real_mtls_transport.py` | None | Concurrency verified |
 | **REQ-M7-19** | WebSocket Identity Proof Closure | `VERIFIED` | Removed unauthenticated fallback/fingerprint frames; enforces verified transport certificate identity prior to socket acceptance | `test_real_mtls_transport.py`, `test_fleet_api.py` | `apps/api/routers/fleet.py` | None | No fingerprint spoofing |
 | **REQ-M7-20** | Typed Spool Routing & Delivery Contracts | `VERIFIED` | Aligned `TelemetryBatchRequest` schema; typed routing sends heartbeats to `/agent/heartbeat` and telemetry to `/agent/telemetry-batch` | `test_real_mtls_transport.py`, `test_spool.py` | `openrobo_agent/service.py`, `apps/api/routers/fleet.py` | None | Typed delivery contract verified |
+
+## Milestone 7.2.1 - Signed Release Artifacts, Safe Extraction & Local A/B Deployment Foundation
+| Requirement ID | Requirement Description | Status | Implementation Details | Tests | Evidence | Known Limitations | Target Release |
+|---|---|---|---|---|---|---|---|
+| **REQ-M7-21** | Canonical Release Manifest & Deterministic Digest | `VERIFIED` | `canonical_manifest_bytes()` guarantees bit-for-bit JSON serialization; tree SHA-256 workspace digest | `test_manifest.py` | `openrobo_release/manifest.py` | None | M7.2.1 Release Core |
+| **REQ-M7-22** | Ed25519 Detached Release Signing & Verification | `VERIFIED` | `ReleaseSigner` and `ReleaseVerifier` with Ed25519 signatures, key expiration, and revocation gates | `test_signing.py` | `openrobo_release/signing.py`, `openrobo_release/verification.py` | None | M7.2.1 Release Core |
+| **REQ-M7-23** | Deterministic Archiving & Secret Exclusion | `VERIFIED` | Normalized `.tar.gz` (mtime=0, uid/gid=0, 0o755/0o644) with automatic exclusion of `*.key`, `.env`, tokens | `test_archive.py` | `openrobo_release/archive.py` | None | M7.2.1 Release Core |
+| **REQ-M7-24** | Path Traversal Resistant Safe Extraction | `VERIFIED` | `SafeArtifactExtractor` rejects `../`, absolute paths, Windows drive paths, UNC paths, symlink escapes, bomb limits | `test_extraction.py` | `openrobo_release/extraction.py` | None | M7.2.1 Release Core |
+| **REQ-M7-25** | Platform-Specific Deployment Safety Policy | `VERIFIED` | `DeploymentSafetyPolicy` evaluating battery, motion, e-stop gates; unknown state strictly blocks deployment | `test_policy.py` | `openrobo_release/policy.py` | None | M7.2.1 Release Core |
+| **REQ-M7-26** | Dual Partition A/B Slot Manager & Atomic Activation | `VERIFIED` | `ABSlotManager` managing `slot-a`, `slot-b`, atomic `current` pointer switch, protecting active slot from overwrite | `test_slots.py` | `openrobo_agent/deployment/slots.py`, `openrobo_agent/deployment/activation.py` | None | M7.2.1 Agent Core |
+| **REQ-M7-27** | Previous Slot Preservation & Mechanical Rollback | `VERIFIED` | Demoted slot preserved as `PREVIOUS`; `rollback_to_previous()` atomically restores prior release on fault | `test_slots.py`, `test_local_ota_deployment.py` | `openrobo_agent/deployment/rollback.py` | None | M7.2.1 Agent Core |
+| **REQ-M7-28** | Real Filesystem OTA Lifecycle Acceptance | `VERIFIED` | End-to-end integration acceptance proving `v1 -> Stage -> Activate -> v2 -> Stage -> Activate -> Rollback to v1` | `test_local_ota_deployment.py` | `tests/integration/test_local_ota_deployment.py` | None | M7.2.1 Acceptance |

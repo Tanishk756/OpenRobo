@@ -1,21 +1,32 @@
-"""OpenRobo Agent Command Line Interface."""
+"""OpenRobo Edge Agent CLI commands including device initialization, enrollment, diagnostics, and local A/B deployment."""
 
 import asyncio
+import json
 import os
+from pathlib import Path
 from typing import Optional
 
 import typer
+from openrobo_release import ReleaseManifest, ReleaseVerifier, TrustedReleaseKey
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from openrobo_agent.config import AgentConfig
+from openrobo_agent.deployment import (
+    ABSlotManager,
+    activate_staged_slot,
+    rollback_to_previous,
+    stage_release_artifact,
+)
 from openrobo_agent.identity import DeviceIdentityManager
 from openrobo_agent.runtime import AgentRuntimeDispatcher
 from openrobo_agent.security import check_file_permissions
 from openrobo_agent.service import AgentDaemon, SystemdServiceGenerator
 
 agent_app = typer.Typer(help="OpenRobo Edge Agent CLI")
+deployment_app = typer.Typer(name="deployment", help="Manage local A/B workspace deployment partitions and rollbacks.")
+agent_app.add_typer(deployment_app, name="deployment")
 console = Console()
 
 
@@ -177,6 +188,155 @@ def run_agent(
     except KeyboardInterrupt:
         console.print("\n[yellow]Stopping agent daemon...[/yellow]")
         asyncio.run(daemon.stop())
+
+
+# ==========================================
+# Deployment Subcommands
+# ==========================================
+
+@deployment_app.command("slots")
+def list_slots(
+    state_dir: Optional[str] = typer.Option(None, "--state-dir", "-s", help="Custom agent state directory"),
+):
+    """List local A/B workspace slot partitions, active status, and installed releases."""
+    config = AgentConfig(state_dir=state_dir or AgentConfig.default_state_dir())
+    workspaces_dir = Path(config.state_dir) / "workspaces"
+    slot_mgr = ABSlotManager(workspaces_dir)
+
+    active_slot = slot_mgr.get_active_slot()
+    prev_slot = slot_mgr.get_previous_slot()
+
+    table = Table(title="OpenRobo A/B Workspace Deployment Slots", show_header=True)
+    table.add_column("Slot", style="bold cyan")
+    table.add_column("Status", style="bold")
+    table.add_column("Release ID", style="magenta")
+    table.add_column("Version", style="green")
+    table.add_column("Active", justify="center")
+    table.add_column("Activated At", style="dim")
+
+    for sid in slot_mgr.SLOT_IDS:
+        meta = slot_mgr.get_slot_metadata(sid)
+        if sid == active_slot:
+            is_act = "[bold green]YES (CURRENT)[/bold green]"
+        elif sid == prev_slot:
+            is_act = "[yellow]PREVIOUS[/yellow]"
+        else:
+            is_act = "[dim]NO[/dim]"
+        status_style = "[green]" if meta.status == "ACTIVE" else ("[yellow]" if meta.status == "STAGED" else "[white]")
+        table.add_row(
+            sid,
+            f"{status_style}{meta.status.value}[/]",
+            meta.release_id or "EMPTY",
+            meta.release_version or "-",
+            is_act,
+            meta.activated_at or "-",
+        )
+
+    console.print(table)
+
+
+@deployment_app.command("stage")
+def stage_release(
+    archive_path: Path = typer.Argument(..., help="Path to release archive (.tar.gz)"),
+    manifest_path: Path = typer.Argument(..., help="Path to release manifest JSON"),
+    signature_path: Path = typer.Argument(..., help="Path to detached base64 .sig file"),
+    public_key_path: Path = typer.Option(..., "--public-key", "-p", help="Path to trusted Ed25519 public key PEM"),
+    state_dir: Optional[str] = typer.Option(None, "--state-dir", "-s", help="Custom agent state directory"),
+):
+    """Verify and stage a release artifact into the inactive workspace slot."""
+    config = AgentConfig(state_dir=state_dir or AgentConfig.default_state_dir())
+    workspaces_dir = Path(config.state_dir) / "workspaces"
+    slot_mgr = ABSlotManager(workspaces_dir)
+
+    try:
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = ReleaseManifest(**manifest_data)
+        sig_b64 = signature_path.read_text(encoding="utf-8").strip()
+        pub_pem = public_key_path.read_text(encoding="utf-8")
+    except Exception as e:
+        console.print(f"[bold red]Error loading release files:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+    trusted_key = TrustedReleaseKey(
+        key_id=manifest.release_key_id,
+        algorithm="Ed25519",
+        public_key_pem=pub_pem,
+        created_at=manifest.created_at,
+    )
+    verifier = ReleaseVerifier(trusted_keys=[trusted_key])
+
+    console.print(f"[cyan]Verifying and staging release '{manifest.release_id}'...[/cyan]")
+    ok, msg, meta = stage_release_artifact(
+        slot_manager=slot_mgr,
+        archive_path=archive_path,
+        manifest=manifest,
+        signature_b64=sig_b64,
+        verifier=verifier,
+    )
+
+    if ok:
+        console.print(Panel(
+            f"[bold green]STAGING SUCCESSFUL[/bold green]\n\n"
+            f"Slot:        {meta.slot_id}\n"
+            f"Release ID:  {meta.release_id} (v{meta.release_version})\n"
+            f"Status:      {meta.status.value}\n\n"
+            f"Run [bold cyan]openrobo agent deployment activate {meta.slot_id}[/bold cyan] to activate.",
+            title="Deployment Staging",
+        ))
+    else:
+        console.print(Panel(
+            f"[bold red]STAGING FAILED[/bold red]\n\n"
+            f"Error: {msg}",
+            title="Staging Error",
+        ))
+        raise typer.Exit(code=1)
+
+
+@deployment_app.command("activate")
+def activate_slot(
+    slot_id: Optional[str] = typer.Argument(None, help="Slot ID to activate ('slot-a' or 'slot-b'). Auto-detects if omitted."),
+    state_dir: Optional[str] = typer.Option(None, "--state-dir", "-s", help="Custom agent state directory"),
+):
+    """Atomically activate a staged workspace slot."""
+    config = AgentConfig(state_dir=state_dir or AgentConfig.default_state_dir())
+    workspaces_dir = Path(config.state_dir) / "workspaces"
+    slot_mgr = ABSlotManager(workspaces_dir)
+
+    ok, msg, meta = activate_staged_slot(slot_manager=slot_mgr, target_slot_id=slot_id)
+    if ok:
+        console.print(Panel(
+            f"[bold green]ACTIVATION SUCCESSFUL[/bold green]\n\n"
+            f"Active Slot: {meta.slot_id}\n"
+            f"Release ID:  {meta.release_id} (v{meta.release_version})\n"
+            f"Status:      {meta.status.value}",
+            title="Deployment Activation",
+        ))
+    else:
+        console.print(Panel(f"[bold red]ACTIVATION FAILED:[/bold red] {msg}", title="Activation Error"))
+        raise typer.Exit(code=1)
+
+
+@deployment_app.command("rollback")
+def rollback_slot(
+    state_dir: Optional[str] = typer.Option(None, "--state-dir", "-s", help="Custom agent state directory"),
+):
+    """Roll back to the previous known-good workspace slot."""
+    config = AgentConfig(state_dir=state_dir or AgentConfig.default_state_dir())
+    workspaces_dir = Path(config.state_dir) / "workspaces"
+    slot_mgr = ABSlotManager(workspaces_dir)
+
+    ok, msg, meta = rollback_to_previous(slot_manager=slot_mgr)
+    if ok:
+        console.print(Panel(
+            f"[bold green]ROLLBACK SUCCESSFUL[/bold green]\n\n"
+            f"Active Slot: {meta.slot_id}\n"
+            f"Restored Release ID: {meta.release_id} (v{meta.release_version})\n"
+            f"Status:      {meta.status.value}",
+            title="Rollback Result",
+        ))
+    else:
+        console.print(Panel(f"[bold red]ROLLBACK FAILED:[/bold red] {msg}", title="Rollback Error"))
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":
