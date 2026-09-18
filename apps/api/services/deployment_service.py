@@ -21,6 +21,7 @@ from openrobo_release.deployment_protocol import (
     TargetFilter,
     validate_deployment_transition,
     validate_device_transition,
+    validate_iso8601_timestamp,
 )
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -675,6 +676,7 @@ class DeploymentService:
         if curr_state in (DeploymentState.COMPLETED, DeploymentState.CANCELLED, DeploymentState.FAILED, DeploymentState.PAUSED):
             raise ValueError(f"Cannot pause deployment in state {curr_state.value}")
 
+        deployment.paused_from_state = curr_state.value
         deployment.status = DeploymentState.PAUSED.value
         deployment.version += 1
 
@@ -698,9 +700,15 @@ class DeploymentService:
         if deployment.status != DeploymentState.PAUSED.value:
             raise ValueError(f"Deployment is not paused (current: {deployment.status})")
 
-        # Resume to current stage state
+        # Resume to exact valid previous state
         curr_stage = deployment.current_stage
-        resumed_state = DeploymentState[f"STAGE_{curr_stage}_STAGING"]
+        target_state_name = deployment.paused_from_state or f"STAGE_{curr_stage}_STAGING"
+        try:
+            resumed_state = DeploymentState(target_state_name)
+        except (ValueError, KeyError):
+            resumed_state = DeploymentState[target_state_name]
+
+        deployment.paused_from_state = None
         deployment.status = resumed_state.value
         deployment.version += 1
 
@@ -719,7 +727,10 @@ class DeploymentService:
         device_id: str,
         report: DeploymentStatusReport,
     ) -> DeviceDeploymentModel:
-        # Amendment 2: Validate instruction_id, deployment_id, device_id, generation
+        # Validate report timestamp
+        validate_iso8601_timestamp(report.timestamp, "report timestamp")
+
+        # Validate instruction_id, deployment_id, device_id, generation
         inst_stmt = select(DeploymentInstructionModel).where(
             DeploymentInstructionModel.id == report.instruction_id,
             DeploymentInstructionModel.deployment_id == report.deployment_id,
@@ -731,6 +742,17 @@ class DeploymentService:
             raise ValueError(
                 f"No instruction found correlating to report instruction_id '{report.instruction_id}' for device '{device_id}'"
             )
+
+        if report.generation != inst.generation:
+            raise ValueError(
+                f"Status report generation {report.generation} does not match instruction generation {inst.generation}"
+            )
+
+        if inst.status in ("EXPIRED", "CANCELLED", "FAILED", "REJECTED") and report.state not in (
+            DeviceDeploymentState.FAILED,
+            DeviceDeploymentState.CANCELLED,
+        ):
+            raise ValueError(f"Cannot accept status transition for instruction in terminal status '{inst.status}'")
 
         stmt = (
             select(DeviceDeploymentModel)
@@ -744,6 +766,28 @@ class DeploymentService:
         dd = res.scalar_one_or_none()
         if not dd:
             raise ValueError(f"Device deployment assignment not found for device '{device_id}' and deployment '{report.deployment_id}'")
+
+        # Check Report ID idempotency in events
+        ev_stmt = select(DeploymentEventModel).where(
+            DeploymentEventModel.deployment_id == report.deployment_id,
+            DeploymentEventModel.device_id == device_id,
+            DeploymentEventModel.event_type == "DEVICE_STATUS_TRANSITION",
+        )
+        ev_res = await session.execute(ev_stmt)
+        for ev in ev_res.scalars().all():
+            try:
+                ev_data = json.loads(ev.details)
+                if ev_data.get("report_id") == report.report_id:
+                    if ev_data.get("new_state") == report.state.value and ev_data.get("generation") == report.generation:
+                        # Idempotent replay of already processed report
+                        return dd
+                    else:
+                        raise ValueError(f"Conflicting status report received for report_id '{report.report_id}'")
+            except Exception:
+                pass
+
+        if report.generation < dd.generation:
+            raise ValueError(f"Status report generation {report.generation} is stale (device expected at least {dd.generation})")
 
         current_state = DeviceDeploymentState(dd.status)
         new_state = report.state
@@ -766,6 +810,7 @@ class DeploymentService:
             event_type="DEVICE_STATUS_TRANSITION",
             details=format_bounded_event_details(
                 {
+                    "report_id": report.report_id,
                     "instruction_id": report.instruction_id,
                     "previous_state": current_state.value,
                     "new_state": new_state.value,

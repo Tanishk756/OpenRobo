@@ -243,3 +243,16 @@
   - Replay-safe, crash-consistent `DeploymentWorker` with monotonic generation state
   - Strict direction-enforced WebSocket delivery protocol
   - 222 Python tests, 19 frontend tests green
+
+
+### Milestone 7.2.2.2 — Production Agent Transport Reality, Fail-Closed Instruction Validation & True End-to-End OTA Acceptance Closure
+- **Status**: COMPLETE & VERIFIED
+- **Artifacts**:
+  - `0009_add_paused_from_state.py` Alembic migration adding persistent `paused_from_state` column
+  - `AgentStatusOutbox` (`deployment_status_outbox.json`) tracking `PENDING`, `SENT`, `ACKNOWLEDGED`, `REJECTED` with fail-closed corruption detection (`StatusOutboxCorruptedError`)
+  - Authoritative `TrustedArtifactSourceRegistry` with strict validation (`SourceRegistryCorruptedError`)
+  - Supervised concurrent loops in `AgentDaemon.run_loop()` (telemetry, WebSocket, status outbox)
+  - Full fail-closed 12-step validation order in `DeploymentWorker` with canonical whole-instruction digest
+  - Real HTTPS artifact server with test CA, TLS certificates, and per-source CA enforcement
+  - True 3-Agent canary rollout acceptance with genuine `AgentDaemon` instances
+  - 233 Python tests, 19 frontend tests green

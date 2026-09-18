@@ -679,6 +679,8 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
                 payload_dict = json.loads(inst.payload_json)
             except Exception:
                 pass
+            created_dt = inst.created_at.replace(tzinfo=timezone.utc) if inst.created_at.tzinfo is None else inst.created_at
+            expires_dt = inst.expires_at.replace(tzinfo=timezone.utc) if inst.expires_at.tzinfo is None else inst.expires_at
             inst_envelope = DeploymentInstructionEnvelope(
                 instruction_id=inst.id,
                 deployment_id=inst.deployment_id,
@@ -687,8 +689,8 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
                 instruction_type=InstructionType(inst.instruction_type),
                 payload=payload_dict,
                 payload_digest=inst.payload_digest,
-                created_at=inst.created_at.isoformat(),
-                expires_at=inst.expires_at.isoformat(),
+                created_at=created_dt.isoformat(),
+                expires_at=expires_dt.isoformat(),
             )
             await websocket.send_json(
                 {
@@ -838,7 +840,9 @@ async def agent_websocket(websocket: WebSocket, db: AsyncSession = Depends(get_d
                         continue
                     await DeploymentService.handle_device_status_report(db, device.id, status_report)
                     await db.commit()
-                    await websocket.send_json({"status": "ACK", "message_id": envelope.message_id, "device_id": device.id})
+                    await websocket.send_json(
+                        {"status": "ACK", "message_id": envelope.message_id, "report_id": status_report.report_id, "device_id": device.id}
+                    )
                 except Exception as e:
                     await db.rollback()
                     await websocket.send_json({"status": "ERROR", "error": f"Status update failed: {e}"})
